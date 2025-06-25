@@ -5,4 +5,4 @@ while i <= 100:
     i += 1
 #無限ループを回避する
 while 0:
-    print('永遠')
+    print('永遠') 
