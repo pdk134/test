@@ -1,0 +1,13 @@
+name = 'a123A,45,6'
+print(name.find('2',0,1))
+print(name.find('1'))
+print(name.index('1'))
+print(name.count('123'))
+print(name.startswith('123'))
+print(name.startswith('23'))
+print(name.endswith('56'))
+print(name.isupper())
+print(name.islower())
+print(name.replace('1','2'))
+print(name.split(',',1))
+print(name.capitalize())
