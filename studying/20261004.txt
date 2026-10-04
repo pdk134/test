@@ -2,3 +2,7 @@ guzzle /ˈɡʌzl/ 狂饮,大口喝
 この石「いし」
 宝石「ほうせき」
 fluffl /flʌf/ 抖松，把...弄蓬松
+中文 　　　　　English 　　　　　　　　　　　日本語
+软件架构 　　 Software Architecture 　　 ソフトウェアアーキテクチャ
+架构风格		Architectural Style       アーキテクチャスタイル　　　
+架构模式		Architectural Pattern     アーキテクチャパターン　　　　　　　　　　　
