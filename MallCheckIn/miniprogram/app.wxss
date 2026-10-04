@@ -1,0 +1,16 @@
+page {
+  background: #F5F6FA;
+  font-size: 28rpx;
+  color: #333;
+}
+
+.page {
+  padding: 24rpx;
+}
+
+.btn-primary {
+  background: #4F7CFF;
+  color: #fff;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+}
