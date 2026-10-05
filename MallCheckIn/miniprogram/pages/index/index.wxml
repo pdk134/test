@@ -1,0 +1,29 @@
+<view class="page">
+  <view class="header">
+    <view class="location-row">
+      <view class="location-dot"></view>
+      <text class="location-text">{{locationText}}</text>
+    </view>
+    <view class="records-entry" bindtap="goRecords">
+      <text>打卡记录</text>
+      <text class="arrow">›</text>
+    </view>
+  </view>
+
+  <view class="section-title">商场列表（按距离排序）</view>
+
+  <view wx:if="{{loading}}" class="loading">加载中...</view>
+
+  <view class="mall-card" wx:for="{{malls}}" wx:key="id">
+    <view class="mall-info">
+      <view class="mall-name">{{item.name}}</view>
+      <view class="mall-address">{{item.address}}</view>
+    </view>
+    <view class="mall-right">
+      <view class="mall-distance">{{item.distanceText}}</view>
+      <button class="checkin-btn" size="mini" data-id="{{item.id}}" bindtap="onCheckin">打卡</button>
+    </view>
+  </view>
+
+  <view wx:if="{{!loading && malls.length == 0}}" class="empty">暂无商场数据</view>
+</view>
