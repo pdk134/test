@@ -1,0 +1,49 @@
+name: Deploy MYAPP to GitHub Pages
+
+on:
+  push:
+    branches: [nanana, main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: MYAPP
+
+      - name: Build standalone file
+        working-directory: MYAPP
+        run: python3 build_standalone.py
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true   # 自动开启 Pages，无需手动到 Settings 里设置
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: MYAPP
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
