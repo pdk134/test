@@ -1,18 +1,112 @@
-## Getting Started
+# 架构术语学习通
 
-Welcome to the VS Code Java world. Here is a guideline to help you get started to write Java code in Visual Studio Code.
+像背单词一样学习中文架构术语的轻量 Web 应用。零依赖、无需构建，双击即可用。
 
-## Folder Structure
+## 运行
 
-The workspace contains two folders by default, where:
+三种方式任选：
 
-- `src`: the folder to maintain sources
-- `lib`: the folder to maintain dependencies
+1. 直接双击 `index.html`（数据存在浏览器 localStorage，可用）
+2. 本地起服务（推荐，便于调试）：
 
-Meanwhile, the compiled output files will be generated in the `bin` folder by default.
+```bash
+cd MYAPP
+python -m http.server 8000
+# 浏览器打开 http://localhost:8000
+```
 
-> If you want to customize the folder structure, open `.vscode/settings.json` and update the related settings there.
+3. **手机离线使用**：先生成单文件版，再传到手机
 
-## Dependency Management
+```bash
+python build_standalone.py     # 生成 standalone.html（全部 CSS/JS 已内联）
+```
 
-The `JAVA PROJECTS` view allows you to manage your dependencies. More details can be found [here](https://github.com/microsoft/vscode-java-dependency#manage-dependencies).
+把 `standalone.html` 通过微信/QQ 文件传输助手或数据线发到手机，用浏览器打开即可（无需网络）。
+每次更新术语库后重新执行一次打包脚本。
+
+> iOS 若无法用浏览器打开本地 HTML，可退回方式 2（同 WiFi 下访问 `http://电脑IP:8000`）。
+> 学习进度存在各自浏览器本地，手机与电脑不互通，可用「设置 → 导出/导入 JSON」迁移。
+
+## 部署到 GitHub Pages（手机随时访问）
+
+仓库根目录已放好工作流 `.github/workflows/pages.yml`，它会把 `MYAPP` 目录作为站点根发布。
+
+一次性配置（只需做一次）：
+
+1. 推送代码到 GitHub（当前仓库 `git@github.com:pdk134/test.git`，分支 `nanana`）
+2. 打开仓库 **Settings → Pages → Build and deployment**，把 Source 改为 **GitHub Actions**
+3. 之后每次 push（或在 Actions 页手动 Run workflow）都会自动部署
+
+访问地址：`https://pdk134.github.io/test/`
+
+手机上打开该地址即可；建议用浏览器「添加到主屏幕」，之后像 App 一样点开就学。
+
+本地提交示例：
+
+```bash
+git add MYAPP .github
+git commit -m "feat: 架构术语学习通"
+git push origin nanana
+```
+
+> 部署走的是 Actions，不需要 Jekyll；页面内资源都是相对路径，放在 `https://用户名.github.io/仓库名/` 子路径下也能正常工作。
+
+## 目录结构
+
+```
+MYAPP/
+├── index.html              页面结构
+├── build_standalone.py      打包生成手机用的单文件版
+├── standalone.html          打包产物（生成后可独立分发）
+├── assets/
+│   ├── css/style.css       样式（深色 / 浅色主题）
+│   └── js/
+│       ├── terms.js        术语库（要加知识点就改这里）
+│       ├── store.js        localStorage 存储层
+│       ├── srs.js          间隔重复调度算法
+│       └── app.js          页面交互逻辑
+└── README.md
+```
+
+## 已实现功能
+
+| 模块 | 能力 |
+| --- | --- |
+| 学习 | 闪卡翻转（正面术语 → 背面释义），三档评分：不认识 / 模糊 / 认识 |
+| 调度 | 间隔重复：按记忆等级自动安排下次复习时间，今日到期卡片优先出队 |
+| 词库 | 关键词搜索、分类筛选、状态筛选（未学习 / 学习中 / 已掌握）、术语详情弹窗 |
+| 测试 | 选择题，术语 ↔ 释义 双向随机出题，答错自动进难词本 |
+| 统计 | 掌握分布环形图、近 7 日学习量、各分类掌握进度、难词本 |
+| 设置 | 每日新词数 / 复习上限、自动朗读、主题切换、学习记录导出导入与清空 |
+
+快捷键：`空格` 翻卡、`1/2/3` 评分、`Esc` 关闭弹窗。
+
+## 间隔重复规则（`assets/js/srs.js`）
+
+- 记忆等级 `box` 对应复习间隔（天）：`1, 2, 4, 7, 15, 30, 60, 120`
+- **不认识**：box 归零，10 分钟后重来，遗忘次数 +1
+- **模糊**：间隔按当前等级 ×0.9 倍收缩，至少 1 天后再来
+- **认识**：等级 +1，间隔按等级 × 熟练度系数放大
+- `box >= 4`（间隔 ≥ 7 天）视为「已掌握」
+
+## 添加术语
+
+往 `assets/js/terms.js` 的数组里追加对象即可，页面会自动识别新分类、更新统计，**不需要改动其他代码**：
+
+```js
+{
+  t: '幂等',                 // 术语（唯一）
+  en: 'Idempotency',         // 英文 / 缩写
+  c: '一致性事务',            // 分类（随意新增）
+  lv: 2,                    // 难度：1 基础 / 2 进阶 / 3 高阶
+  d: '执行一次与多次结果完全相同。',
+  p: ['要点一', '要点二'],    // 背面要点列表
+  e: '重复点击支付只扣一次款。',
+  r: ['重试', '消息队列']     // 相关术语（填中文术语名，可跳转）
+}
+```
+
+## 数据说明
+
+- 学习记录保存在浏览器 `localStorage`（键名 `arch-term-trainer-v1`），不上传任何服务器。
+- 换设备或清理浏览器前，请在「设置 → 数据」中导出 JSON 备份。

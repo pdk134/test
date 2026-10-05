@@ -1,0 +1,1502 @@
+<!-- 架构术语学习通 单文件版：由 build_standalone.py 自动生成，请勿手动编辑 -->
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>架构术语学习通</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%235b8cff'/><text x='50' y='70' font-size='58' text-anchor='middle' fill='white' font-family='sans-serif'>架</text></svg>">
+<style>
+:root {
+  --bg: #0e1117;
+  --bg-soft: #151a23;
+  --panel: #171d27;
+  --panel-2: #1d2430;
+  --line: #262f3d;
+  --text: #e6edf6;
+  --text-dim: #93a1b5;
+  --accent: #5b8cff;
+  --accent-2: #7b5bff;
+  --good: #3ecf8e;
+  --warn: #f5b14c;
+  --bad: #f2647a;
+  --radius: 16px;
+  --shadow: 0 12px 32px rgba(0, 0, 0, .32);
+}
+
+[data-theme="light"] {
+  --bg: #f4f6fb;
+  --bg-soft: #ffffff;
+  --panel: #ffffff;
+  --panel-2: #f2f5fa;
+  --line: #e2e8f2;
+  --text: #1b2333;
+  --text-dim: #6b7891;
+  --shadow: 0 10px 26px rgba(23, 43, 77, .08);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 { margin: 0; font-weight: 700; }
+button { font-family: inherit; cursor: pointer; }
+kbd {
+  font-family: inherit; font-size: 11px; padding: 1px 6px; border-radius: 5px;
+  background: rgba(255, 255, 255, .14); border: 1px solid rgba(255, 255, 255, .16);
+}
+
+.app { display: flex; min-height: 100vh; }
+
+/* 侧边栏 */
+.sidebar {
+  width: 250px; flex: none; padding: 22px 16px;
+  background: var(--bg-soft); border-right: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 22px;
+}
+.brand { display: flex; gap: 12px; align-items: center; }
+.logo {
+  width: 42px; height: 42px; border-radius: 13px; flex: none;
+  display: grid; place-items: center; font-size: 20px; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+}
+.brand-text h1 { font-size: 16px; }
+.brand-text p { margin: 3px 0 0; font-size: 12px; color: var(--text-dim); }
+
+.nav { display: flex; flex-direction: column; gap: 4px; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  border: 0; border-radius: 11px; background: transparent; color: var(--text-dim);
+  font-size: 14px; text-align: left; transition: .16s;
+}
+.nav-item .ic { font-size: 15px; opacity: .9; }
+.nav-item:hover { background: var(--panel-2); color: var(--text); }
+.nav-item.active {
+  background: linear-gradient(135deg, rgba(91, 140, 255, .22), rgba(123, 91, 255, .18));
+  color: var(--text); box-shadow: inset 0 0 0 1px rgba(91, 140, 255, .35);
+}
+
+.side-card { margin-top: auto; padding: 14px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--line); }
+.side-title { font-size: 12px; color: var(--text-dim); margin-bottom: 10px; }
+.side-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; }
+.side-row b { color: var(--accent); }
+
+/* 主区 */
+.main { flex: 1; padding: 24px 28px 60px; min-width: 0; }
+.topbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 22px; }
+.topbar h2 { font-size: 22px; }
+.topbar p { margin: 6px 0 0; font-size: 13px; color: var(--text-dim); }
+.icon-btn {
+  width: 38px; height: 38px; border-radius: 11px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--text); font-size: 16px;
+}
+.icon-btn:hover { border-color: var(--accent); }
+
+.view { display: none; animation: fade .22s ease; }
+.view.active { display: block; }
+@keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+.panel {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 18px; margin-bottom: 16px;
+}
+.panel h3 { font-size: 15px; margin-bottom: 12px; }
+.panel-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.muted { color: var(--text-dim); font-size: 13px; }
+
+/* 进度条 */
+.progress-line { display: flex; align-items: center; gap: 12px; }
+.bar { flex: 1; height: 8px; border-radius: 99px; background: var(--panel-2); overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; border-radius: 99px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .3s; }
+.counter { font-size: 12px; color: var(--text-dim); min-width: 54px; text-align: right; }
+
+/* 标签 */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; }
+.chip {
+  border: 1px solid var(--line); background: var(--panel); color: var(--text-dim);
+  padding: 6px 12px; border-radius: 99px; font-size: 12px; transition: .15s;
+}
+.chip:hover { color: var(--text); border-color: var(--accent); }
+.chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.tag {
+  display: inline-block; padding: 3px 9px; border-radius: 99px; font-size: 11px;
+  background: rgba(91, 140, 255, .16); color: var(--accent);
+}
+.tag.lv { background: rgba(123, 91, 255, .16); color: var(--accent-2); }
+
+/* 闪卡 */
+.flashcard-wrap { margin: 20px 0; min-height: 380px; display: flex; justify-content: center; }
+.flashcard { width: 100%; max-width: 720px; height: 380px; perspective: 1400px; cursor: pointer; }
+.flashcard.gone { display: none; }
+.fc-inner {
+  position: relative; width: 100%; height: 100%; transition: transform .5s cubic-bezier(.4, .2, .2, 1);
+  transform-style: preserve-3d;
+}
+.flashcard.flipped .fc-inner { transform: rotateY(180deg); }
+.fc-face {
+  position: absolute; inset: 0; backface-visibility: hidden; border-radius: 22px;
+  border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow);
+  padding: 30px 32px; display: flex; flex-direction: column; overflow: auto;
+}
+.fc-back { transform: rotateY(180deg); }
+.fc-front { align-items: center; justify-content: center; text-align: center; gap: 10px; }
+.fc-tags { position: absolute; top: 18px; left: 20px; display: flex; gap: 8px; }
+.fc-term { font-size: 42px; font-weight: 800; letter-spacing: 1px; }
+.fc-en { font-size: 15px; color: var(--text-dim); }
+.fc-hint { position: absolute; bottom: 22px; font-size: 12px; color: var(--text-dim); }
+.fc-term-sm { font-size: 20px; font-weight: 700; margin-bottom: 10px; color: var(--accent); }
+.fc-def { font-size: 15px; line-height: 1.75; }
+.fc-points { margin: 12px 0 0; padding-left: 20px; font-size: 13.5px; line-height: 1.85; color: var(--text-dim); }
+.fc-eg, .fc-rel { margin-top: 14px; font-size: 13px; display: flex; gap: 10px; }
+.fc-eg span, .fc-rel span { color: var(--accent); flex: none; }
+.fc-eg p { margin: 0; line-height: 1.7; color: var(--text-dim); }
+.fc-rel { flex-wrap: wrap; }
+.fc-rel .tag { margin: 0 6px 6px 0; cursor: pointer; }
+
+/* 按钮 */
+.controls { display: flex; gap: 10px; justify-content: center; }
+.controls.hidden, .rate.hidden { display: none; }
+.btn {
+  border: 1px solid var(--line); background: var(--panel); color: var(--text);
+  padding: 10px 18px; border-radius: 11px; font-size: 14px; transition: .15s;
+}
+.btn:hover { border-color: var(--accent); transform: translateY(-1px); }
+.btn.primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); border-color: transparent; color: #fff; }
+.btn.good { border-color: rgba(62, 207, 142, .5); color: var(--good); }
+.btn.warn { border-color: rgba(245, 177, 76, .5); color: var(--warn); }
+.btn.bad { border-color: rgba(242, 100, 122, .5); color: var(--bad); }
+.btn.danger { border-color: rgba(242, 100, 122, .5); color: var(--bad); }
+.btn.good:hover, .btn.warn:hover, .btn.bad:hover, .btn.danger:hover { background: var(--panel-2); transform: translateY(-1px); }
+.btn kbd { margin-left: 6px; }
+
+.rate { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 720px; margin: 16px auto 0; }
+.rate.disabled { opacity: .4; pointer-events: none; }
+
+/* 空态 / 小结 */
+.empty, .summary {
+  max-width: 720px; width: 100%; text-align: center; padding: 46px 26px;
+  border: 1px dashed var(--line); border-radius: 22px; background: var(--panel);
+}
+.summary { border-style: solid; }
+.empty-emoji { font-size: 34px; color: var(--accent); }
+.empty h3, .summary h3 { margin: 12px 0 8px; font-size: 18px; }
+.empty p { color: var(--text-dim); font-size: 13px; margin: 0 0 18px; }
+.sum-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 18px 0; }
+.sum-grid div { background: var(--panel-2); border-radius: 12px; padding: 12px 6px; }
+.sum-grid b { display: block; font-size: 20px; }
+.sum-grid span { font-size: 12px; color: var(--text-dim); }
+.sum-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+/* 词库 */
+.toolbar { display: flex; gap: 10px; margin-bottom: 14px; }
+input[type="search"], select {
+  background: var(--panel); border: 1px solid var(--line); color: var(--text);
+  border-radius: 11px; padding: 10px 14px; font-size: 14px; font-family: inherit;
+}
+input[type="search"] { flex: 1; }
+input[type="search"]:focus, select:focus { outline: none; border-color: var(--accent); }
+.lib-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.lib-item {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  padding: 14px 16px; cursor: pointer; transition: .15s;
+}
+.lib-item:hover { border-color: var(--accent); transform: translateY(-2px); }
+.lib-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.lib-term { font-size: 16px; font-weight: 700; }
+.lib-en { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+.lib-def { font-size: 12.5px; color: var(--text-dim); margin-top: 8px; line-height: 1.6;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--panel-2); color: var(--text-dim); flex: none; }
+.badge.learning { background: rgba(245, 177, 76, .16); color: var(--warn); }
+.badge.mastered { background: rgba(62, 207, 142, .16); color: var(--good); }
+
+/* 测试 */
+.form-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; font-size: 14px; }
+.quiz-q { font-size: 20px; font-weight: 700; margin: 16px 0 6px; line-height: 1.6; }
+.quiz-tip { font-size: 12px; color: var(--text-dim); }
+.quiz-options { display: grid; gap: 10px; margin-top: 16px; }
+.opt {
+  text-align: left; padding: 13px 16px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--panel-2); color: var(--text); font-size: 14px; line-height: 1.6; transition: .15s;
+}
+.opt:hover:not(:disabled) { border-color: var(--accent); }
+.opt.right { border-color: var(--good); background: rgba(62, 207, 142, .12); }
+.opt.wrong { border-color: var(--bad); background: rgba(242, 100, 122, .12); }
+.opt:disabled { cursor: default; }
+.quiz-feedback { margin-top: 14px; font-size: 13.5px; line-height: 1.7; color: var(--text-dim); }
+
+/* 统计 */
+.stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; text-align: center; }
+.stat b { display: block; font-size: 24px; }
+.stat span { font-size: 12px; color: var(--text-dim); }
+.donut-box { position: relative; display: grid; place-items: center; padding: 8px 0; }
+.donut { width: 150px; transform: rotate(-90deg); }
+.donut circle { fill: none; stroke-width: 12; stroke-linecap: round; }
+.donut-bg { stroke: var(--panel-2); }
+.donut-fg { stroke: var(--accent); stroke-dasharray: 327; stroke-dashoffset: 327; transition: stroke-dashoffset .6s; }
+.donut-center { position: absolute; text-align: center; }
+.donut-center b { display: block; font-size: 22px; }
+.donut-center span { font-size: 11px; color: var(--text-dim); }
+.legend { display: flex; justify-content: center; gap: 14px; font-size: 12px; color: var(--text-dim); margin-top: 8px; }
+.legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
+
+.bars { display: flex; align-items: flex-end; gap: 10px; height: 170px; padding-top: 10px; }
+.bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.bar-col .col { width: 100%; max-width: 34px; border-radius: 8px 8px 0 0; background: linear-gradient(180deg, var(--accent), var(--accent-2)); min-height: 3px; transition: height .4s; }
+.bar-col span { font-size: 11px; color: var(--text-dim); }
+
+.cat-progress { display: grid; gap: 12px; }
+.cat-row { display: grid; grid-template-columns: 96px 1fr 56px; align-items: center; gap: 12px; font-size: 13px; }
+.cat-row .bar { height: 7px; }
+.cat-row b { font-size: 12px; color: var(--text-dim); text-align: right; font-weight: 500; }
+
+/* 弹窗 / 提示 */
+.modal { position: fixed; inset: 0; background: rgba(6, 10, 18, .62); display: grid; place-items: center; padding: 20px; z-index: 40; }
+.modal-box {
+  position: relative; width: 100%; max-width: 620px; max-height: 80vh; overflow: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 26px 28px;
+}
+.modal-box .close { position: absolute; top: 14px; right: 14px; }
+.modal h3 { font-size: 22px; margin-bottom: 4px; }
+.modal .sub { color: var(--text-dim); font-size: 13px; margin: 0 0 14px; }
+.modal .sec { margin-top: 16px; }
+.modal .sec h4 { margin: 0 0 8px; font-size: 13px; color: var(--accent); }
+
+.toast {
+  position: fixed; left: 50%; bottom: 30px; transform: translate(-50%, 20px);
+  background: var(--panel); border: 1px solid var(--line); color: var(--text);
+  padding: 10px 18px; border-radius: 11px; font-size: 13px; box-shadow: var(--shadow);
+  opacity: 0; pointer-events: none; transition: .25s; z-index: 60;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+.hidden { display: none !important; }
+
+@media (max-width: 900px) {
+  .app { flex-direction: column; }
+  .sidebar { width: 100%; flex-direction: row; align-items: center; gap: 14px; border-right: 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
+  .brand-text p, .side-card { display: none; }
+  .nav { flex-direction: row; }
+  .main { padding: 18px 16px 50px; }
+  .stat-grid, .panel-row, .sum-grid { grid-template-columns: repeat(2, 1fr); }
+  .fc-term { font-size: 32px; }
+  .flashcard { height: 420px; }
+}
+
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">架</div>
+      <div class="brand-text">
+        <h1>架构术语学习通</h1>
+        <p>像背单词一样掌握架构术语</p>
+      </div>
+    </div>
+
+    <nav class="nav" id="nav">
+      <button class="nav-item active" data-view="learn"><span class="ic">◎</span>学习</button>
+      <button class="nav-item" data-view="library"><span class="ic">▤</span>词库</button>
+      <button class="nav-item" data-view="quiz"><span class="ic">✓</span>测试</button>
+      <button class="nav-item" data-view="stats"><span class="ic">▲</span>统计</button>
+      <button class="nav-item" data-view="settings"><span class="ic">⚙</span>设置</button>
+    </nav>
+
+    <div class="side-card">
+      <div class="side-title">今日进度</div>
+      <div class="side-row"><span>新学</span><b id="sideNew">0</b></div>
+      <div class="side-row"><span>复习</span><b id="sideRev">0</b></div>
+      <div class="side-row"><span>连续天数</span><b id="sideStreak">0</b></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <h2 id="pageTitle">今日学习</h2>
+        <p id="pageSub">按间隔重复安排复习，稳步把这些术语变成本能</p>
+      </div>
+      <button class="icon-btn" id="themeBtn" title="切换主题">☾</button>
+    </header>
+
+    <!-- 学习 -->
+    <section class="view active" id="view-learn">
+      <div class="session">
+        <div class="progress-line">
+          <div class="bar"><i id="learnBar"></i></div>
+          <span class="counter" id="learnCounter">0 / 0</span>
+        </div>
+        <div class="chips" id="learnChips"></div>
+      </div>
+
+      <div class="flashcard-wrap">
+        <div class="flashcard" id="flashcard">
+          <div class="fc-inner">
+            <div class="fc-face fc-front">
+              <div class="fc-tags"><span class="tag" id="fCat"></span><span class="tag lv" id="fLv"></span></div>
+              <div class="fc-term" id="fTerm"></div>
+              <div class="fc-en" id="fEn"></div>
+              <div class="fc-hint">点击卡片 / 按 空格 查看释义</div>
+            </div>
+            <div class="fc-face fc-back">
+              <div class="fc-term-sm" id="bTerm"></div>
+              <div class="fc-def" id="bDef"></div>
+              <ul class="fc-points" id="bPoints"></ul>
+              <div class="fc-eg"><span>场景</span><p id="bEg"></p></div>
+              <div class="fc-rel"><span>相关</span><div id="bRel"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="empty hidden" id="learnEmpty">
+          <div class="empty-emoji">✦</div>
+          <h3 id="emptyTitle">今天的任务完成了</h3>
+          <p id="emptyText">可以先去词库预习，或把每日新词数调高一点。</p>
+          <button class="btn primary" id="btnExtra">再来 10 张</button>
+        </div>
+
+        <div class="summary hidden" id="summary">
+          <h3>本次学习完成</h3>
+          <div class="sum-grid">
+            <div><b id="sumTotal">0</b><span>总卡片</span></div>
+            <div><b id="sumNew">0</b><span>新学</span></div>
+            <div><b id="sumOk">0</b><span>认识</span></div>
+            <div><b id="sumAcc">0%</b><span>正确率</span></div>
+          </div>
+          <div class="sum-actions">
+            <button class="btn primary" id="btnMore">继续学习</button>
+            <button class="btn ghost" data-view="library">去词库看看</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls" id="controls">
+        <button class="btn ghost" id="btnSpeak">朗读</button>
+        <button class="btn ghost" id="btnFlip">翻卡 <kbd>空格</kbd></button>
+      </div>
+
+      <div class="rate disabled" id="rateBar">
+        <button class="btn bad" data-r="0">不认识 <kbd>1</kbd></button>
+        <button class="btn warn" data-r="1">模糊 <kbd>2</kbd></button>
+        <button class="btn good" data-r="2">认识 <kbd>3</kbd></button>
+      </div>
+    </section>
+
+    <!-- 词库 -->
+    <section class="view" id="view-library">
+      <div class="toolbar">
+        <input type="search" id="libSearch" placeholder="搜索术语 / 英文 / 释义…">
+        <select id="libStatus">
+          <option value="all">全部状态</option>
+          <option value="new">未学习</option>
+          <option value="learning">学习中</option>
+          <option value="mastered">已掌握</option>
+        </select>
+      </div>
+      <div class="chips" id="libCats"></div>
+      <div class="lib-list" id="libList"></div>
+    </section>
+
+    <!-- 测试 -->
+    <section class="view" id="view-quiz">
+      <div class="panel" id="quizStart">
+        <h3>选择题测试</h3>
+        <p class="muted">从词库中随机抽题，术语 ↔ 释义 双向考察，答错自动进入难词本。</p>
+        <div class="form-row">
+          <label>题量</label>
+          <select id="quizCount">
+            <option value="5">5 题</option>
+            <option value="10" selected>10 题</option>
+            <option value="20">20 题</option>
+          </select>
+        </div>
+        <button class="btn primary" id="btnQuizStart">开始测试</button>
+      </div>
+
+      <div class="panel hidden" id="quizPlay">
+        <div class="progress-line">
+          <div class="bar"><i id="quizBar"></i></div>
+          <span class="counter" id="quizCounter">0 / 0</span>
+        </div>
+        <div class="quiz-q" id="quizQ"></div>
+        <div class="quiz-tip" id="quizTip"></div>
+        <div class="quiz-options" id="quizOptions"></div>
+        <div class="quiz-feedback hidden" id="quizFeedback"></div>
+        <button class="btn primary hidden" id="btnQuizNext">下一题</button>
+      </div>
+
+      <div class="panel hidden" id="quizResult">
+        <h3 id="quizScore">测试完成</h3>
+        <div class="sum-grid">
+          <div><b id="qTotal">0</b><span>题目</span></div>
+          <div><b id="qRight">0</b><span>答对</span></div>
+          <div><b id="qAcc">0%</b><span>正确率</span></div>
+          <div><b id="qWrong">0</b><span>进入难词本</span></div>
+        </div>
+        <div class="sum-actions">
+          <button class="btn primary" id="btnQuizAgain">再来一组</button>
+          <button class="btn ghost" data-view="library">查看词库</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 统计 -->
+    <section class="view" id="view-stats">
+      <div class="stat-grid">
+        <div class="stat"><b id="stTotal">0</b><span>词库总量</span></div>
+        <div class="stat"><b id="stLearned">0</b><span>已学习</span></div>
+        <div class="stat"><b id="stMastered">0</b><span>已掌握</span></div>
+        <div class="stat"><b id="stDue">0</b><span>待复习</span></div>
+      </div>
+
+      <div class="panel-row">
+        <div class="panel">
+          <h3>掌握分布</h3>
+          <div class="donut-box">
+            <svg viewBox="0 0 120 120" class="donut">
+              <circle class="donut-bg" cx="60" cy="60" r="52"></circle>
+              <circle class="donut-fg" cx="60" cy="60" r="52" id="donutFg"></circle>
+            </svg>
+            <div class="donut-center"><b id="donutPct">0%</b><span>已掌握</span></div>
+          </div>
+          <div class="legend" id="legend"></div>
+        </div>
+
+        <div class="panel">
+          <h3>近 7 日学习量</h3>
+          <div class="bars" id="bars"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>分类掌握进度</h3>
+        <div class="cat-progress" id="catProgress"></div>
+      </div>
+
+      <div class="panel">
+        <h3>难词本</h3>
+        <div class="lib-list" id="hardList"></div>
+      </div>
+    </section>
+
+    <!-- 设置 -->
+    <section class="view" id="view-settings">
+      <div class="panel">
+        <h3>学习计划</h3>
+        <div class="form-row">
+          <label>每日新词</label>
+          <select id="setNew">
+            <option value="5">5</option><option value="10" selected>10</option>
+            <option value="20">20</option><option value="30">30</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>每日复习上限</label>
+          <select id="setRev">
+            <option value="30">30</option><option value="60" selected>60</option>
+            <option value="100">100</option><option value="9999">不限</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>翻卡后自动朗读</label>
+          <input type="checkbox" id="setSpeak">
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>数据</h3>
+        <p class="muted">学习记录保存在浏览器本地，可导出备份或换设备导入。</p>
+        <div class="sum-actions">
+          <button class="btn ghost" id="btnExport">导出 JSON</button>
+          <button class="btn ghost" id="btnImport">导入 JSON</button>
+          <button class="btn danger" id="btnReset">清空全部记录</button>
+        </div>
+        <input type="file" id="importFile" accept="application/json" hidden>
+      </div>
+
+      <div class="panel">
+        <h3>快捷键</h3>
+        <ul class="keys">
+          <li><kbd>空格</kbd> 翻卡</li>
+          <li><kbd>1</kbd> 不认识</li>
+          <li><kbd>2</kbd> 模糊</li>
+          <li><kbd>3</kbd> 认识</li>
+          <li><kbd>Esc</kbd> 关闭弹窗</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="modal hidden" id="modal">
+  <div class="modal-box">
+    <button class="icon-btn close" id="modalClose">✕</button>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/**
+ * 术语库（样例数据，后续直接往数组里加即可，无需改动其他代码）
+ *
+ * 字段说明：
+ *   t  术语（中文，作为唯一 id）
+ *   en 英文 / 缩写
+ *   c  分类
+ *   lv 难度：1 基础 / 2 进阶 / 3 高阶
+ *   d  定义（卡片背面正文）
+ *   p  要点数组（背面的核心记忆点）
+ *   e  典型场景 / 例子
+ *   r  相关术语（填中文术语名，会自动跳转）
+ */
+window.TERMS = [
+  /* ---------- 架构风格 ---------- */
+  {
+    t: '单体架构', en: 'Monolithic Architecture', c: '架构风格', lv: 1,
+    d: '所有功能模块打包在同一个应用中统一开发、构建与部署的架构形态。',
+    p: ['部署简单、调试方便、本地事务一致性强', '模块边界靠包结构和规范约束，容易逐渐腐化', '适合业务早期、小团队快速验证'],
+    e: '创业项目用一个后端工程承载用户、订单、支付全部模块，一次构建一次部署。',
+    r: ['微服务架构', '分层架构', '单体优先']
+  },
+  {
+    t: '分层架构', en: 'Layered Architecture', c: '架构风格', lv: 1,
+    d: '按职责把系统切分为表现层、应用层、领域层、基础设施层，上层依赖下层的经典结构。',
+    p: ['职责清晰、上手快，是绝大多数系统的默认起点', '容易出现只有 getter/setter 的贫血三层', '依赖必须单向，禁止跨层穿透'],
+    e: 'Controller → Service → Repository 的经典后端分层。',
+    r: ['单体架构', '贫血模型', '六边形架构']
+  },
+  {
+    t: '微服务架构', en: 'Microservices Architecture', c: '架构风格', lv: 2,
+    d: '按业务边界把系统拆成一组小而自治的服务，各自独立开发、部署、扩容与存储数据。',
+    p: ['独立部署、独立伸缩、技术栈可异构', '带来分布式复杂度：网络、数据一致性、运维', '必须配套服务治理、链路追踪与自动化交付'],
+    e: '订单、库存、支付各自成为独立服务，通过 RPC 与消息协作。',
+    r: ['限界上下文', '服务发现', '分布式事务', 'API网关']
+  },
+  {
+    t: '事件驱动架构', en: 'Event-Driven Architecture', c: '架构风格', lv: 2,
+    d: '组件之间以「事件」异步通信：生产者发布事件，消费者订阅并自行响应。',
+    p: ['时间与空间解耦，扩展新消费者无需改动生产者', '数据为最终一致，链路追踪与排障难度上升', '要处理乱序、重复投递与丢失'],
+    e: '支付成功后发布 OrderPaid 事件，积分、物流、通知服务各自消费。',
+    r: ['消息队列', '发布订阅', '领域事件', '最终一致性']
+  },
+  {
+    t: 'CQRS', en: 'Command Query Responsibility Segregation', c: '架构风格', lv: 3,
+    d: '把「写」的命令模型与「读」的查询模型分离，两侧各自独立建模与存储。',
+    p: ['读写负载分离，查询侧可按场景定制宽表或搜索引擎', '代价是双模型维护与数据同步延迟', '常与事件溯源搭配使用'],
+    e: '写入用规范化表保证事务，查询侧用 Elasticsearch 支撑复杂检索。',
+    r: ['事件溯源', '读写分离', '最终一致性']
+  },
+  {
+    t: 'Serverless', en: 'Serverless / FaaS', c: '架构风格', lv: 2,
+    d: '以函数或托管服务为粒度运行代码，开发者不感知服务器，按调用次数与时长计费。',
+    p: ['极致弹性、免运维、按需付费', '冷启动、无本地状态、调试困难', '存在供应商锁定风险'],
+    e: '图片上传后自动触发函数生成缩略图并写入对象存储。',
+    r: ['弹性伸缩', 'BFF']
+  },
+
+  /* ---------- 分布式理论 ---------- */
+  {
+    t: 'CAP定理', en: 'CAP Theorem', c: '分布式理论', lv: 2,
+    d: '分布式系统在网络分区（P）发生时，只能在一致性（C）与可用性（A）之间二选一。',
+    p: ['分区是客观存在，所以真正的选择是 CP 还是 AP', '网络正常时系统可以同时具备 C 与 A', '常见误解是「三选二」，实际是分区时的取舍'],
+    e: '注册中心通常选 AP 保证可注册可发现；账务与锁服务通常选 CP。',
+    r: ['BASE理论', '强一致性', '最终一致性', '脑裂']
+  },
+  {
+    t: 'BASE理论', en: 'Basically Available, Soft state, Eventual consistency', c: '分布式理论', lv: 2,
+    d: '接受系统存在软状态与中间态，以基本可用和最终一致性换取高可用与性能。',
+    p: ['是 CAP 中 AP 路线的落地思路', '需要补偿、对账、幂等作为兜底', '要明确定义不一致窗口的收敛时间'],
+    e: '下单后异步扣减库存，偶发超卖由补偿任务与对账修正。',
+    r: ['CAP定理', '最终一致性', 'Saga']
+  },
+  {
+    t: '最终一致性', en: 'Eventual Consistency', c: '分布式理论', lv: 2,
+    d: '允许短暂的不一致，但在没有新写入后系统终将收敛到一致状态。',
+    p: ['换来可用性与吞吐，是分布式系统的常态', '必须有幂等、重试、对账与补偿机制', '要向业务方说明最长不一致时间'],
+    e: '支付成功后，积分在数秒内到账。',
+    r: ['BASE理论', 'CAP定理', 'Saga']
+  },
+  {
+    t: '一致性哈希', en: 'Consistent Hashing', c: '分布式理论', lv: 3,
+    d: '把节点与数据键映射到同一个哈希环上，节点变更时只迁移环上相邻的一小部分数据。',
+    p: ['扩缩容时数据迁移量小，避免全量重分布', '虚拟节点解决数据倾斜问题', '广泛用于分片路由、缓存寻址、负载均衡'],
+    e: '缓存集群从 3 台扩到 4 台，只有约四分之一的 key 需要重新路由。',
+    r: ['数据分片', '缓存击穿', '负载均衡']
+  },
+
+  /* ---------- 一致性事务 ---------- */
+  {
+    t: '分布式事务', en: 'Distributed Transaction', c: '一致性事务', lv: 2,
+    d: '跨越多个服务或数据库、仍需保证整体原子性的事务。',
+    p: ['强一致方案（2PC/XA）性能差且易阻塞', '柔性方案（TCC/Saga/消息）依赖补偿与幂等', '首选策略是从业务上避免跨服务事务'],
+    e: '下单需要同时操作订单库、库存库与积分库。',
+    r: ['2PC', 'TCC', 'Saga', '本地消息表']
+  },
+  {
+    t: 'TCC', en: 'Try-Confirm-Cancel', c: '一致性事务', lv: 3,
+    d: '业务层三阶段事务：Try 预留资源，Confirm 确认提交，Cancel 释放预留。',
+    p: ['锁粒度可控、性能优于 2PC', '每个操作都要写正向与补偿逻辑，业务侵入大', 'Confirm / Cancel 必须幂等，需防悬挂与空回滚'],
+    e: '下单时 Try 冻结库存，支付成功 Confirm 真扣减，失败 Cancel 释放冻结。',
+    r: ['分布式事务', 'Saga', '幂等']
+  },
+  {
+    t: 'Saga', en: 'Saga Pattern', c: '一致性事务', lv: 3,
+    d: '把长事务拆成多个本地事务，失败时按相反顺序执行补偿操作回滚。',
+    p: ['无全局锁，适合长流程业务', '只保证最终一致，中间态对外可见', '补偿操作必须幂等且可重入'],
+    e: '行程预订失败，依次取消机票、酒店、保险的预占。',
+    r: ['BASE理论', '最终一致性', '分布式事务']
+  },
+  {
+    t: '幂等', en: 'Idempotency', c: '一致性事务', lv: 2,
+    d: '同一操作执行一次与执行多次的结果完全相同，是重试和消息重复消费的安全前提。',
+    p: ['常用唯一请求号、唯一索引、状态机、乐观锁实现', '所有写接口默认应按幂等设计', '幂等不等于并发安全，两者都要考虑'],
+    e: '用户重复点击支付按钮，最终只扣款一次。',
+    r: ['重试', '消息投递语义', 'TCC']
+  },
+
+  /* ---------- 服务治理 ---------- */
+  {
+    t: '服务发现', en: 'Service Discovery', c: '服务治理', lv: 2,
+    d: '服务实例启动时动态注册地址，调用方通过注册中心查询可用实例列表。',
+    p: ['分为客户端发现与服务端发现两种模式', '必须与健康检查配合，及时剔除不可用实例', '地址列表需要本地缓存，防止注册中心抖动'],
+    e: '订单服务调用支付服务前，先从注册中心拿到健康的实例地址。',
+    r: ['服务注册中心', '健康检查', '负载均衡']
+  },
+  {
+    t: '熔断', en: 'Circuit Breaker', c: '服务治理', lv: 2,
+    d: '下游错误率超过阈值时快速失败，暂停调用一段时间后进入半开状态试探恢复。',
+    p: ['三态：关闭、打开、半开', '防止故障沿调用链扩散、耗尽线程与连接', '必须配备降级兜底逻辑，否则用户直接看到错误'],
+    e: '支付服务超时激增，订单服务直接快速失败并展示「稍后重试」。',
+    r: ['降级', '舱壁隔离', '故障转移']
+  },
+  {
+    t: '限流', en: 'Rate Limiting', c: '服务治理', lv: 2,
+    d: '限制单位时间内的请求数量，保护系统不被突发流量打垮。',
+    p: ['令牌桶允许突发，漏桶强制匀速输出', '滑动窗口比固定窗口更平滑，无临界突刺', '单机限流之外还要考虑集群维度的总量控制'],
+    e: '网关层限制单个用户 60 次/分钟，防刷与防爬。',
+    r: ['熔断', '降级', '背压']
+  },
+  {
+    t: '降级', en: 'Degradation / Fallback', c: '服务治理', lv: 2,
+    d: '在高压或故障场景下关闭非核心功能、返回兜底结果，优先保住核心链路。',
+    p: ['需要提前设计开关与兜底数据，不能临时发挥', '分自动降级与人工降级两种触发方式', '降级范围要可灰度、可快速恢复'],
+    e: '大促时关闭推荐与评价展示，保证下单支付可用。',
+    r: ['熔断', '限流', 'SLA']
+  },
+  {
+    t: '灰度发布', en: 'Canary Release', c: '服务治理', lv: 2,
+    d: '先让少量流量或用户使用新版本，观察指标正常后再逐步放量至全量。',
+    p: ['把发布风险限制在小爆炸半径内', '依赖流量染色、指标对比与一键回滚', '放量节奏应有明确的观察指标与止损线'],
+    e: '先放 5% 流量到 v2，错误率与耗时正常后逐步全量。',
+    r: ['蓝绿部署', '滚动发布', '可观测性']
+  },
+
+  /* ---------- 数据与存储 ---------- */
+  {
+    t: '缓存穿透', en: 'Cache Penetration', c: '数据与存储', lv: 2,
+    d: '查询根本不存在的数据，缓存与数据库都查不到，请求直接打到数据库。',
+    p: ['缓存空值并设置较短过期时间', '用布隆过滤器提前拦截不存在的 key', '做好参数校验，拦截明显非法请求'],
+    e: '攻击者用大量不存在的商品 ID 请求，把数据库打满。',
+    r: ['布隆过滤器', '缓存击穿', '缓存雪崩']
+  },
+  {
+    t: '缓存击穿', en: 'Cache Breakdown', c: '数据与存储', lv: 2,
+    d: '某个热点 key 过期的瞬间，大量请求同时回源数据库重建缓存。',
+    p: ['热点 key 设为永不过期或逻辑过期', '用互斥锁 / 单飞保证只有一个线程重建', '提前预热，避免冷启动即高并发'],
+    e: '爆款商品缓存到期，瞬时数万请求打到数据库。',
+    r: ['缓存穿透', '缓存雪崩', '分布式锁']
+  },
+  {
+    t: '缓存雪崩', en: 'Cache Avalanche', c: '数据与存储', lv: 2,
+    d: '大量 key 在同一时刻集体失效，或缓存集群整体宕机，流量全部压向数据库。',
+    p: ['过期时间加随机抖动，打散失效时刻', '多级缓存 + 缓存集群高可用', '配合熔断降级，给数据库留活路'],
+    e: '零点批量写入的缓存同时过期，数据库瞬间被打垮。',
+    r: ['缓存击穿', '熔断', '降级']
+  },
+  {
+    t: '分库分表', en: 'Sharding', c: '数据与存储', lv: 2,
+    d: '把单库单表按规则拆分到多个库与表中，突破单机的容量、连接数与性能瓶颈。',
+    p: ['垂直拆分按业务，水平拆分按数据', '引入分片路由、分布式 ID、跨片查询等新问题', '分片键的选择决定了查询效率与后续扩容方式'],
+    e: '订单表按用户 ID 取模拆成 64 张表。',
+    r: ['数据分片', '一致性哈希', '分布式事务']
+  },
+
+  /* ---------- 消息与异步 ---------- */
+  {
+    t: '消息队列', en: 'Message Queue', c: '消息与异步', lv: 2,
+    d: '在生产者与消费者之间暂存消息的中间件，用于异步解耦、削峰填谷与可靠投递。',
+    p: ['核心价值：解耦、异步、削峰', '需要关注堆积、重复消费与顺序性', '可用性要求高，通常需集群与多副本'],
+    e: '下单后写入消息队列，由多个下游服务异步处理。',
+    r: ['发布订阅', '消息投递语义', '事件驱动架构']
+  },
+  {
+    t: '消息投递语义', en: 'Delivery Semantics', c: '消息与异步', lv: 3,
+    d: '消息系统对「消息被处理几次」的承诺：至多一次、至少一次、恰好一次。',
+    p: ['至多一次：可能丢，绝不重复，吞吐最高', '至少一次：可能重复，业务必须幂等，最常用', '恰好一次：通常由幂等 + 事务共同实现，成本最高'],
+    e: '扣款消息采用至少一次投递，消费端用流水号去重保证幂等。',
+    r: ['幂等', '消息队列', '事务消息']
+  },
+
+  /* ---------- 领域建模 ---------- */
+  {
+    t: 'DDD', en: 'Domain-Driven Design', c: '领域建模', lv: 3,
+    d: '以业务领域为核心驱动软件设计的方法论，强调模型与代码、语言的一致性。',
+    p: ['战略设计划边界，战术设计建模型', '通用语言贯穿需求、代码与文档', '适合复杂业务，简单 CRUD 不必强行套用'],
+    e: '电商系统按交易、履约、结算划分领域并各自建模。',
+    r: ['限界上下文', '聚合根', '通用语言']
+  },
+  {
+    t: '限界上下文', en: 'Bounded Context', c: '领域建模', lv: 3,
+    d: '领域模型的适用边界，同一个词在不同上下文中含义可以不同，边界内模型自洽。',
+    p: ['是微服务拆分最自然的依据', '上下文之间通过防腐层或上下文映射集成', '边界内统一语言，跨边界要做翻译'],
+    e: '「商品」在商品上下文含详情与类目，在订单上下文只关心快照与价格。',
+    r: ['DDD', '防腐层', '微服务架构']
+  },
+
+  /* ---------- 设计原则 ---------- */
+  {
+    t: '康威定律', en: "Conway's Law", c: '设计原则', lv: 2,
+    d: '系统的架构会趋向于复刻组织的沟通结构，组织架构决定了系统架构。',
+    p: ['想改架构，往往先要调整团队边界', '按业务能力组建跨职能小团队更易产出自治服务', '逆康威策略：用期望的架构反推组织划分'],
+    e: '前后端分离的两个团队，最终产出一个前后端边界清晰的系统。',
+    r: ['微服务架构', '限界上下文']
+  },
+  {
+    t: '高内聚低耦合', en: 'High Cohesion, Low Coupling', c: '设计原则', lv: 1,
+    d: '模块内部职责紧密相关（内聚），模块之间依赖尽可能少且稳定（耦合）。',
+    p: ['内聚看「是否一起变化」，耦合看「改动是否会外溢」', '用接口与事件替代直接依赖能降低耦合', '过度拆分会反过来增加耦合与复杂度'],
+    e: '把优惠计算收敛到独立的定价模块，订单只依赖它的接口。',
+    r: ['关注点分离', '依赖倒置', '防腐层']
+  },
+
+  /* ---------- 可观测性 ---------- */
+  {
+    t: '可观测性', en: 'Observability', c: '可观测性', lv: 2,
+    d: '通过指标、日志、链路追踪等外部输出，推断系统内部状态并定位未知问题的能力。',
+    p: ['三大支柱：Metrics、Logging、Tracing', '监控回答「是否异常」，可观测回答「为什么」', '是灰度发布、混沌工程与容量规划的前提'],
+    e: '通过 TraceID 串起一次下单在多个服务中的完整调用链。',
+    r: ['链路追踪', '黄金信号', 'SLO与SLI']
+  },
+  {
+    t: 'SLO与SLI', en: 'SLO / SLI', c: '可观测性', lv: 3,
+    d: 'SLI 是可量化的服务质量指标（如成功率、P99 延迟），SLO 是该指标要达到的目标值。',
+    p: ['错误预算 = 1 - SLO，用预算约束发布节奏', '指标要对齐用户可感知的体验', 'SLA 是对外承诺，SLO 应比 SLA 更严格'],
+    e: '下单接口成功率目标 99.95%，超出预算则暂停灰度放量。',
+    r: ['SLA', '黄金信号', '可观测性']
+  },
+
+  /* ---------- 云原生运维 ---------- */
+  {
+    t: '服务网格', en: 'Service Mesh', c: '云原生运维', lv: 3,
+    d: '以 Sidecar 代理承载服务间通信的治理能力，并由控制面统一配置与下发策略。',
+    p: ['业务无侵入获得重试、熔断、mTLS、流量镜像', '代价是额外网络跳数与运维复杂度', '适合多语言、服务数量多的中大型集群'],
+    e: 'Istio 用 Envoy Sidecar 接管东西向流量并统一策略。',
+    r: ['边车模式', '熔断', 'mTLS']
+  },
+  {
+    t: '声明式API', en: 'Declarative API', c: '云原生运维', lv: 3,
+    d: '用户只描述期望的最终状态，系统持续比对并自动将实际状态收敛到期望状态。',
+    p: ['与命令式「一步一步操作」相对，强调终态与自愈', '天然支持幂等与重复执行', '是 Kubernetes、IaC、GitOps 的共同底座'],
+    e: '声明 replicas: 3，控制器自动补齐或缩减 Pod 数量。',
+    r: ['不可变基础设施', 'GitOps', '弹性伸缩']
+  }
+];
+
+</script>
+<script>
+/**
+ * 本地存储层：所有学习记录保存在 localStorage，刷新/关闭浏览器不丢。
+ * 数据结构：
+ * {
+ *   v: 1,
+ *   cards: { [术语]: { box, iv, due, reps, lapses, wrong, ease, last } },
+ *   stats: { reviewed, correct, streak, lastDay, daily: { 'YYYY-MM-DD': { n, r, ok } } },
+ *   settings: { dailyNew, dailyReview, autoSpeak, theme }
+ * }
+ */
+window.Store = (function () {
+  var KEY = 'arch-term-trainer-v1';
+  var DAY = 86400000;
+
+  function empty() {
+    return {
+      v: 1,
+      cards: {},
+      stats: { reviewed: 0, correct: 0, streak: 0, lastDay: '', daily: {} },
+      settings: { dailyNew: 10, dailyReview: 60, autoSpeak: false, theme: 'dark' }
+    };
+  }
+
+  var data;
+  try {
+    data = JSON.parse(localStorage.getItem(KEY)) || empty();
+  } catch (e) {
+    data = empty();
+  }
+  if (!data.cards) data.cards = {};
+  if (!data.stats) data.stats = empty().stats;
+  if (!data.stats.daily) data.stats.daily = {};
+  if (!data.settings) data.settings = empty().settings;
+
+  var saveTimer = null;
+  function save() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {}
+    }, 120);
+  }
+
+  function dayKey(ts) {
+    var d = ts ? new Date(ts) : new Date();
+    var m = d.getMonth() + 1, dd = d.getDate();
+    return d.getFullYear() + '-' + (m < 10 ? '0' + m : m) + '-' + (dd < 10 ? '0' + dd : dd);
+  }
+
+  function card(id) {
+    if (!data.cards[id]) {
+      data.cards[id] = { box: 0, iv: 0, due: 0, reps: 0, lapses: 0, wrong: 0, ease: 2.5, last: 0 };
+    }
+    return data.cards[id];
+  }
+
+  function today() {
+    var k = dayKey();
+    if (!data.stats.daily[k]) data.stats.daily[k] = { n: 0, r: 0, ok: 0 };
+    return data.stats.daily[k];
+  }
+
+  /** 记录一次学习结果：kind = 'new' | 'review'，ok = 是否判为认识 */
+  function record(kind, ok) {
+    var s = data.stats, t = today(), k = dayKey();
+    s.reviewed++;
+    if (ok) s.correct++;
+    if (kind === 'new') t.n++; else t.r++;
+    if (ok) t.ok++;
+
+    if (s.lastDay !== k) {
+      var y = dayKey(Date.now() - DAY);
+      s.streak = s.lastDay === y ? s.streak + 1 : 1;
+      s.lastDay = k;
+    }
+    save();
+  }
+
+  function dailyCounts() {
+    var t = today();
+    return { n: t.n, r: t.r, ok: t.ok, streak: data.stats.streak };
+  }
+
+  function last7() {
+    var arr = [];
+    for (var i = 6; i >= 0; i--) {
+      var k = dayKey(Date.now() - i * DAY);
+      var d = data.stats.daily[k] || { n: 0, r: 0, ok: 0 };
+      arr.push({ key: k, label: k.slice(5), total: d.n + d.r });
+    }
+    return arr;
+  }
+
+  return {
+    data: data,
+    save: save,
+    card: card,
+    raw: function (id) { return data.cards[id] || null; },
+    record: record,
+    dailyCounts: dailyCounts,
+    last7: last7,
+    dayKey: dayKey,
+    reset: function () { data = empty(); save(); },
+    load: function (obj) { if (obj && obj.cards) { data = obj; save(); return true; } return false; },
+    exportText: function () { return JSON.stringify(data, null, 2); }
+  };
+})();
+
+</script>
+<script>
+/**
+ * 间隔重复（Spaced Repetition）调度器
+ * box 为记忆等级，对应 STEPS 中的复习间隔；rating：0 不认识 / 1 模糊 / 2 认识
+ */
+window.SRS = (function () {
+  var MIN = 60000, DAY = 86400000;
+
+  // 各记忆等级的复习间隔（天），box 0 为「当天重来」
+  var STEPS = [0, 1, 2, 4, 7, 15, 30, 60, 120];
+  var MASTER_BOX = 4; // box >= 4 视为已掌握
+
+  function statusOf(c) {
+    if (!c || c.reps === 0) return 'new';
+    if (c.box >= MASTER_BOX) return 'mastered';
+    return 'learning';
+  }
+
+  /** 依据评分计算下一次复习时间，直接修改并返回卡片 */
+  function schedule(c, rating) {
+    var now = Date.now();
+    if (rating === 0) {
+      c.box = 0;
+      c.iv = 0;
+      c.ease = Math.max(1.3, +(c.ease - 0.2).toFixed(2));
+      c.lapses++;
+      c.due = now + 10 * MIN; // 10 分钟后重来
+    } else if (rating === 1) {
+      c.ease = Math.max(1.3, +(c.ease - 0.15).toFixed(2));
+      c.box = Math.max(1, c.box);
+      c.iv = Math.max(1, Math.round(STEPS[c.box] * c.ease / 2.5));
+      c.due = now + c.iv * DAY;
+    } else {
+      c.ease = Math.min(3.0, +(c.ease + 0.1).toFixed(2));
+      c.box = Math.min(STEPS.length - 1, c.box + 1);
+      c.iv = Math.max(1, Math.round(STEPS[c.box] * c.ease / 2.5));
+      c.due = now + c.iv * DAY;
+    }
+    c.reps++;
+    c.last = now;
+    return c;
+  }
+
+  /** 距离下次复习的可读文本 */
+  function dueText(c) {
+    if (statusOf(c) === 'new') return '未学习';
+    var delta = c.due - Date.now();
+    if (delta <= 0) return '待复习';
+    if (delta < 3600000) return Math.round(delta / 60000) + ' 分钟后';
+    if (delta < DAY) return Math.round(delta / 3600000) + ' 小时后';
+    return Math.round(delta / DAY) + ' 天后';
+  }
+
+  return { schedule: schedule, statusOf: statusOf, dueText: dueText, MASTER_BOX: MASTER_BOX };
+})();
+
+</script>
+<script>
+/* 架构术语学习通 —— 交互逻辑 */
+(function () {
+  'use strict';
+
+  var TERMS = window.TERMS || [];
+  var byId = {};
+  var CATS = [];
+  var $ = function (s) { return document.querySelector(s); };
+
+  TERMS.forEach(function (t) {
+    t.id = t.t;
+    byId[t.id] = t;
+    if (CATS.indexOf(t.c) < 0) CATS.push(t.c);
+  });
+
+  /* ---------------- 通用 ---------------- */
+  var VIEWS = {
+    learn: ['今日学习', '按间隔重复安排复习，稳步把这些术语变成本能'],
+    library: ['术语词库', '浏览、检索全部术语，支持按分类与状态筛选'],
+    quiz: ['选择题测试', '术语 ↔ 释义 双向考察，答错自动进入难词本'],
+    stats: ['学习统计', '掌握进度、每日学习量与难词本'],
+    settings: ['设置', '学习计划、数据备份与快捷键']
+  };
+
+  function switchView(name) {
+    var list = document.querySelectorAll('.view');
+    for (var i = 0; i < list.length; i++) list[i].classList.toggle('active', list[i].id === 'view-' + name);
+    var items = document.querySelectorAll('.nav-item');
+    for (var j = 0; j < items.length; j++) items[j].classList.toggle('active', items[j].getAttribute('data-view') === name);
+    $('#pageTitle').textContent = VIEWS[name][0];
+    $('#pageSub').textContent = VIEWS[name][1];
+    if (name === 'learn') { if (!session.items.length) startSession(); else renderCard(); }
+    if (name === 'library') renderLibrary();
+    if (name === 'stats') renderStats();
+    window.scrollTo(0, 0);
+  }
+
+  var toastTimer;
+  function toast(msg) {
+    var el = $('#toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.remove('show'); }, 1800);
+  }
+
+  function speak(text) {
+    if (!window.speechSynthesis) return;
+    var u = new SpeechSynthesisUtterance(text);
+    u.lang = 'zh-CN';
+    u.rate = 0.95;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  }
+
+  function statusLabel(id) {
+    var c = Store.raw(id), s = SRS.statusOf(c);
+    if (s === 'new') return { text: '未学习', cls: '' };
+    if (s === 'mastered') return { text: '已掌握', cls: 'mastered' };
+    return { text: '学习中', cls: 'learning' };
+  }
+
+  function levelText(lv) { return ['', '基础', '进阶', '高阶'][lv] || '基础'; }
+
+  /* ---------------- 学习会话 ---------------- */
+  var session = { items: [], idx: 0, newCount: 0, okCount: 0, total: 0 };
+
+  function buildQueue(extra) {
+    var now = Date.now(), s = Store.data.settings;
+    var due = [], fresh = [];
+    TERMS.forEach(function (t) {
+      var c = Store.raw(t.id);
+      if (!c || c.reps === 0) fresh.push(t.id);
+      else if ((c.due || 0) <= now) due.push({ id: t.id, due: c.due });
+    });
+    due.sort(function (a, b) { return a.due - b.due; });
+
+    var limR = extra ? due.length : s.dailyReview;
+    var limN = extra ? s.dailyNew + extra : s.dailyNew;
+    var items = due.slice(0, limR).map(function (x) { return { id: x.id, kind: 'review' }; })
+      .concat(fresh.slice(0, limN).map(function (id) { return { id: id, kind: 'new' }; }));
+    return { items: items, dueTotal: due.length, newTotal: fresh.length };
+  }
+
+  function startSession(extra) {
+    var q = buildQueue(extra || 0);
+    session.items = q.items;
+    session.idx = 0;
+    session.newCount = 0;
+    session.okCount = 0;
+    session.total = q.items.length;
+
+    if (!q.items.length) {
+      $('#flashcard').classList.add('gone');
+      $('#controls').classList.add('hidden');
+      $('#rateBar').classList.add('hidden');
+      $('#summary').classList.add('hidden');
+      $('#learnEmpty').classList.remove('hidden');
+      $('#emptyTitle').textContent = q.dueTotal || q.newTotal ? '今天的配额用完了' : '今天的任务完成了';
+      $('#emptyText').textContent = '待复习 ' + q.dueTotal + ' 个，未学习 ' + q.newTotal + ' 个。可以去词库预习，或临时加练。';
+      $('#learnBar').style.width = '100%';
+      $('#learnCounter').textContent = '0 / 0';
+      $('#learnChips').innerHTML = '';
+      return;
+    }
+
+    $('#learnEmpty').classList.add('hidden');
+    $('#summary').classList.add('hidden');
+    $('#flashcard').classList.remove('gone');
+    $('#controls').classList.remove('hidden');
+    $('#rateBar').classList.remove('hidden');
+    renderCard();
+  }
+
+  function renderCard() {
+    var i = session.idx;
+    if (i >= session.items.length) { showSummary(); return; }
+
+    var item = session.items[i], t = byId[item.id], c = Store.raw(item.id);
+    var card = $('#flashcard');
+    card.classList.remove('flipped');
+
+    $('#fCat').textContent = t.c;
+    $('#fLv').textContent = levelText(t.lv);
+    $('#fTerm').textContent = t.t;
+    $('#fEn').textContent = t.en || '';
+
+    $('#bTerm').textContent = t.t + (t.en ? '　' + t.en : '');
+    $('#bDef').textContent = t.d || '';
+    $('#bPoints').innerHTML = (t.p || []).map(function (p) { return '<li>' + p + '</li>'; }).join('');
+    $('#bEg').textContent = t.e || '—';
+    $('#bRel').innerHTML = (t.r || []).map(function (r) {
+      return byId[r] ? '<span class="tag" data-goto="' + r + '">' + r + '</span>' : '';
+    }).join('');
+
+    $('#rateBar').classList.add('disabled');
+    var pct = Math.round(i / session.total * 100);
+    $('#learnBar').style.width = pct + '%';
+    $('#learnCounter').textContent = i + ' / ' + session.total;
+
+    var st = statusLabel(item.id);
+    $('#learnChips').innerHTML =
+      '<span class="chip on">' + (item.kind === 'new' ? '新学' : '复习') + '</span>' +
+      '<span class="chip">' + st.text + '</span>' +
+      '<span class="chip">' + (c ? SRS.dueText(c) : '未学习') + '</span>';
+
+    if (Store.data.settings.autoSpeak) speak(t.t);
+    updateSide();
+  }
+
+  function flip(e) {
+    if (e && e.target.closest && e.target.closest('[data-goto]')) return; // 点相关术语不翻卡
+    var card = $('#flashcard');
+    if (card.classList.contains('gone')) return;
+    card.classList.toggle('flipped');
+    var flipped = card.classList.contains('flipped');
+    $('#rateBar').classList.toggle('disabled', !flipped);
+    if (flipped && !Store.data.settings.autoSpeak) { /* 翻到背面不自动朗读，避免打断阅读 */ }
+  }
+
+  function rate(r) {
+    if ($('#rateBar').classList.contains('disabled')) return;
+    var item = session.items[session.idx];
+    if (!item) return;
+    var c = Store.card(item.id);
+    SRS.schedule(c, r);
+    Store.record(item.kind, r === 2);
+    if (r === 2) session.okCount++;
+    if (item.kind === 'new') session.newCount++;
+    session.idx++;
+    renderCard();
+  }
+
+  function showSummary() {
+    $('#flashcard').classList.add('gone');
+    $('#controls').classList.add('hidden');
+    $('#rateBar').classList.add('hidden');
+    $('#summary').classList.remove('hidden');
+    var total = session.total;
+    $('#sumTotal').textContent = total;
+    $('#sumNew').textContent = session.newCount;
+    $('#sumOk').textContent = session.okCount;
+    $('#sumAcc').textContent = total ? Math.round(session.okCount / total * 100) + '%' : '0%';
+    $('#learnBar').style.width = '100%';
+    $('#learnCounter').textContent = total + ' / ' + total;
+    updateSide();
+  }
+
+  function updateSide() {
+    var d = Store.dailyCounts();
+    $('#sideNew').textContent = d.n;
+    $('#sideRev').textContent = d.r;
+    $('#sideStreak').textContent = d.streak;
+  }
+
+  /* ---------------- 词库 ---------------- */
+  var libState = { q: '', cat: 'all', status: 'all' };
+
+  function renderLibrary() {
+    var chips = '<button class="chip' + (libState.cat === 'all' ? ' on' : '') + '" data-cat="all">全部</button>';
+    CATS.forEach(function (c) {
+      chips += '<button class="chip' + (libState.cat === c ? ' on' : '') + '" data-cat="' + c + '">' + c + '</button>';
+    });
+    $('#libCats').innerHTML = chips;
+
+    var q = libState.q.trim().toLowerCase();
+    var list = TERMS.filter(function (t) {
+      if (libState.cat !== 'all' && t.c !== libState.cat) return false;
+      if (libState.status !== 'all' && SRS.statusOf(Store.raw(t.id)) !== libState.status) return false;
+      if (!q) return true;
+      var hay = (t.t + ' ' + (t.en || '') + ' ' + (t.d || '')).toLowerCase();
+      return hay.indexOf(q) >= 0;
+    });
+
+    $('#libList').innerHTML = list.map(function (t) {
+      var st = statusLabel(t.id);
+      return '<div class="lib-item" data-open="' + t.id + '">' +
+        '<div class="lib-top"><div><div class="lib-term">' + t.t + '</div>' +
+        '<div class="lib-en">' + (t.en || '') + '</div></div>' +
+        '<span class="badge ' + st.cls + '">' + st.text + '</span></div>' +
+        '<div class="lib-def">' + (t.d || '') + '</div></div>';
+    }).join('') || '<p class="muted">没有匹配的术语</p>';
+  }
+
+  function openDetail(id) {
+    var t = byId[id];
+    if (!t) return;
+    var c = Store.raw(id);
+    var st = statusLabel(id);
+    $('#modalBody').innerHTML =
+      '<h3>' + t.t + '</h3>' +
+      '<p class="sub">' + (t.en || '') + '　·　' + t.c + '　·　' + levelText(t.lv) + '</p>' +
+      '<div class="sec"><h4>定义</h4><p class="muted" style="font-size:14px;line-height:1.8">' + (t.d || '') + '</p></div>' +
+      '<div class="sec"><h4>要点</h4><ul class="fc-points" style="color:var(--text)">' +
+      (t.p || []).map(function (p) { return '<li>' + p + '</li>'; }).join('') + '</ul></div>' +
+      '<div class="sec"><h4>典型场景</h4><p class="muted" style="font-size:14px;line-height:1.8">' + (t.e || '—') + '</p></div>' +
+      '<div class="sec"><h4>相关术语</h4><div>' +
+      (t.r || []).map(function (r) { return byId[r] ? '<span class="tag" data-goto="' + r + '" style="cursor:pointer">' + r + '</span>' : ''; }).join(' ') +
+      '</div></div>' +
+      '<div class="sec"><h4>学习状态</h4><p class="muted">' + st.text + '　·　' + (c ? SRS.dueText(c) : '未学习') +
+      '　·　复习 ' + (c ? c.reps : 0) + ' 次，遗忘 ' + (c ? c.lapses : 0) + ' 次</p></div>';
+    $('#modal').classList.remove('hidden');
+  }
+
+  /* ---------------- 测试 ---------------- */
+  var quiz = { list: [], i: 0, right: 0, wrong: [] };
+
+  function startQuiz(n) {
+    var pool = TERMS.slice();
+    for (var i = pool.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+    }
+    quiz.list = pool.slice(0, Math.min(n, pool.length)).map(function (t) {
+      return { id: t.id, type: Math.random() < 0.5 ? 0 : 1 };
+    });
+    quiz.i = 0; quiz.right = 0; quiz.wrong = [];
+
+    $('#quizStart').classList.add('hidden');
+    $('#quizResult').classList.add('hidden');
+    $('#quizPlay').classList.remove('hidden');
+    renderQuestion();
+  }
+
+  function pickOptions(t, type) {
+    var others = TERMS.filter(function (x) { return x.id !== t.id; });
+    var same = others.filter(function (x) { return x.c === t.c; });
+    var src = same.length >= 3 ? same : others;
+    var picked = [], used = {};
+    while (picked.length < 3 && picked.length < src.length) {
+      var k = Math.floor(Math.random() * src.length);
+      if (used[k]) continue;
+      used[k] = 1;
+      picked.push(src[k]);
+    }
+    var opts = picked.map(function (x) { return { id: x.id, text: type === 0 ? (x.d || '') : x.t }; });
+    opts.push({ id: t.id, text: type === 0 ? (t.d || '') : t.t });
+    for (var i = opts.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = opts[i]; opts[i] = opts[j]; opts[j] = tmp;
+    }
+    return opts;
+  }
+
+  function clip(s, n) { return s && s.length > n ? s.slice(0, n) + '…' : s; }
+
+  function renderQuestion() {
+    if (quiz.i >= quiz.list.length) { showQuizResult(); return; }
+    var q = quiz.list[quiz.i], t = byId[q.id];
+    $('#quizBar').style.width = Math.round(quiz.i / quiz.list.length * 100) + '%';
+    $('#quizCounter').textContent = quiz.i + ' / ' + quiz.list.length;
+    $('#quizQ').textContent = q.type === 0 ? t.t : (t.d || '');
+    $('#quizTip').textContent = q.type === 0 ? '选出正确的释义' : '选出对应的术语';
+    $('#quizFeedback').classList.add('hidden');
+    $('#btnQuizNext').classList.add('hidden');
+
+    $('#quizOptions').innerHTML = pickOptions(t, q.type).map(function (o, i) {
+      return '<button class="opt" data-opt="' + i + '" data-id="' + o.id + '">' + clip(o.text, 90) + '</button>';
+    }).join('');
+  }
+
+  function answer(btn) {
+    var q = quiz.list[quiz.i], t = byId[q.id];
+    var ok = btn.getAttribute('data-id') === q.id;
+    var btns = document.querySelectorAll('#quizOptions .opt');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].disabled = true;
+      if (btns[i].getAttribute('data-id') === q.id) btns[i].classList.add('right');
+    }
+    if (!ok) { btn.classList.add('wrong'); quiz.wrong.push(q.id); Store.card(q.id).wrong++; Store.save(); } else { quiz.right++; }
+
+    $('#quizFeedback').classList.remove('hidden');
+    $('#quizFeedback').innerHTML = (ok ? '<b style="color:var(--good)">回答正确</b>' : '<b style="color:var(--bad)">回答错误</b>') +
+      '<br>' + t.t + '：' + (t.d || '');
+    $('#btnQuizNext').classList.remove('hidden');
+  }
+
+  function showQuizResult() {
+    $('#quizPlay').classList.add('hidden');
+    $('#quizResult').classList.remove('hidden');
+    var total = quiz.list.length;
+    $('#qTotal').textContent = total;
+    $('#qRight').textContent = quiz.right;
+    $('#qAcc').textContent = total ? Math.round(quiz.right / total * 100) + '%' : '0%';
+    $('#qWrong').textContent = quiz.wrong.length;
+    $('#quizScore').textContent = quiz.right === total ? '全部正确，很稳' : '测试完成';
+    updateSide();
+  }
+
+  /* ---------------- 统计 ---------------- */
+  function countStatus() {
+    var r = { total: TERMS.length, learned: 0, mastered: 0, due: 0, new: 0 };
+    var now = Date.now();
+    TERMS.forEach(function (t) {
+      var c = Store.raw(t.id), s = SRS.statusOf(c);
+      if (s === 'new') r.new++;
+      else {
+        r.learned++;
+        if (s === 'mastered') r.mastered++;
+        if ((c.due || 0) <= now) r.due++;
+      }
+    });
+    return r;
+  }
+
+  function renderStats() {
+    var r = countStatus();
+    $('#stTotal').textContent = r.total;
+    $('#stLearned').textContent = r.learned;
+    $('#stMastered').textContent = r.mastered;
+    $('#stDue').textContent = r.due;
+
+    var pct = r.total ? r.mastered / r.total : 0;
+    var C = 2 * Math.PI * 52;
+    $('#donutFg').style.strokeDasharray = C;
+    $('#donutFg').style.strokeDashoffset = C * (1 - pct);
+    $('#donutPct').textContent = Math.round(pct * 100) + '%';
+    $('#legend').innerHTML =
+      '<span><i style="background:var(--good)"></i>已掌握 ' + r.mastered + '</span>' +
+      '<span><i style="background:var(--warn)"></i>学习中 ' + (r.learned - r.mastered) + '</span>' +
+      '<span><i style="background:var(--line)"></i>未学习 ' + r.new + '</span>';
+
+    var days = Store.last7(), max = Math.max(1, Math.max.apply(null, days.map(function (d) { return d.total; })));
+    $('#bars').innerHTML = days.map(function (d) {
+      var h = Math.round(d.total / max * 130);
+      return '<div class="bar-col"><div class="col" style="height:' + h + 'px" title="' + d.total + '"></div><span>' + d.label + '</span></div>';
+    }).join('');
+
+    $('#catProgress').innerHTML = CATS.map(function (cat) {
+      var all = TERMS.filter(function (t) { return t.c === cat; });
+      var m = all.filter(function (t) { return SRS.statusOf(Store.raw(t.id)) === 'mastered'; }).length;
+      var p = all.length ? Math.round(m / all.length * 100) : 0;
+      return '<div class="cat-row"><span>' + cat + '</span>' +
+        '<div class="bar"><i style="width:' + p + '%"></i></div>' +
+        '<b>' + m + '/' + all.length + '</b></div>';
+    }).join('');
+
+    var hard = TERMS.filter(function (t) {
+      var c = Store.raw(t.id);
+      return c && (c.lapses > 0 || c.wrong > 0);
+    }).sort(function (a, b) {
+      return (Store.raw(b.id).lapses + Store.raw(b.id).wrong) - (Store.raw(a.id).lapses + Store.raw(a.id).wrong);
+    });
+    $('#hardList').innerHTML = hard.length ? hard.map(function (t) {
+      var c = Store.raw(t.id);
+      return '<div class="lib-item" data-open="' + t.id + '"><div class="lib-top"><div class="lib-term">' + t.t + '</div>' +
+        '<span class="badge learning">遗忘 ' + c.lapses + ' · 错 ' + c.wrong + '</span></div>' +
+        '<div class="lib-def">' + (t.d || '') + '</div></div>';
+    }).join('') : '<p class="muted">还没有难词，保持住</p>';
+  }
+
+  /* ---------------- 设置 ---------------- */
+  function applySettings() {
+    var s = Store.data.settings;
+    $('#setNew').value = s.dailyNew;
+    $('#setRev').value = s.dailyReview;
+    $('#setSpeak').checked = !!s.autoSpeak;
+    document.documentElement.setAttribute('data-theme', s.theme);
+    $('#themeBtn').textContent = s.theme === 'dark' ? '☾' : '☀';
+  }
+
+  /* ---------------- 事件绑定 ---------------- */
+  $('#nav').addEventListener('click', function (e) {
+    var btn = e.target.closest('.nav-item');
+    if (btn) switchView(btn.getAttribute('data-view'));
+  });
+
+  document.addEventListener('click', function (e) {
+    var jump = e.target.closest('[data-view]');
+    if (jump && !jump.classList.contains('nav-item')) switchView(jump.getAttribute('data-view'));
+  });
+
+  $('#flashcard').addEventListener('click', flip);
+  $('#btnFlip').addEventListener('click', flip);
+  $('#btnSpeak').addEventListener('click', function () {
+    var item = session.items[session.idx];
+    if (item) speak(byId[item.id].t);
+  });
+  $('#rateBar').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-r]');
+    if (b) rate(+b.getAttribute('data-r'));
+  });
+  $('#btnMore').addEventListener('click', function () { startSession(); });
+  $('#btnExtra').addEventListener('click', function () { startSession(10); });
+
+  $('#libSearch').addEventListener('input', function (e) { libState.q = e.target.value; renderLibrary(); });
+  $('#libStatus').addEventListener('change', function (e) { libState.status = e.target.value; renderLibrary(); });
+  $('#libCats').addEventListener('click', function (e) {
+    var c = e.target.closest('[data-cat]');
+    if (!c) return;
+    libState.cat = c.getAttribute('data-cat');
+    renderLibrary();
+  });
+  $('#libList').addEventListener('click', function (e) {
+    var it = e.target.closest('[data-open]');
+    if (it) openDetail(it.getAttribute('data-open'));
+  });
+  $('#hardList').addEventListener('click', function (e) {
+    var it = e.target.closest('[data-open]');
+    if (it) openDetail(it.getAttribute('data-open'));
+  });
+
+  document.addEventListener('click', function (e) {
+    var g = e.target.closest('[data-goto]');
+    if (g) openDetail(g.getAttribute('data-goto'));
+  });
+  $('#modalClose').addEventListener('click', function () { $('#modal').classList.add('hidden'); });
+  $('#modal').addEventListener('click', function (e) { if (e.target === $('#modal')) $('#modal').classList.add('hidden'); });
+
+  $('#btnQuizStart').addEventListener('click', function () { startQuiz(+$('#quizCount').value); });
+  $('#quizOptions').addEventListener('click', function (e) {
+    var b = e.target.closest('.opt');
+    if (b && !b.disabled) answer(b);
+  });
+  $('#btnQuizNext').addEventListener('click', function () { quiz.i++; renderQuestion(); });
+  $('#btnQuizAgain').addEventListener('click', function () { startQuiz(+$('#quizCount').value); });
+
+  $('#setNew').addEventListener('change', function (e) { Store.data.settings.dailyNew = +e.target.value; Store.save(); });
+  $('#setRev').addEventListener('change', function (e) { Store.data.settings.dailyReview = +e.target.value; Store.save(); });
+  $('#setSpeak').addEventListener('change', function (e) { Store.data.settings.autoSpeak = e.target.checked; Store.save(); });
+  $('#themeBtn').addEventListener('click', function () {
+    var s = Store.data.settings;
+    s.theme = s.theme === 'dark' ? 'light' : 'dark';
+    Store.save();
+    applySettings();
+  });
+
+  $('#btnExport').addEventListener('click', function () {
+    var blob = new Blob([Store.exportText()], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'arch-terms-' + Store.dayKey() + '.json';
+    a.click();
+    toast('已导出学习记录');
+  });
+  $('#btnImport').addEventListener('click', function () { $('#importFile').click(); });
+  $('#importFile').addEventListener('change', function (e) {
+    var f = e.target.files[0];
+    if (!f) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        if (Store.load(JSON.parse(reader.result))) { applySettings(); toast('导入成功'); startSession(); }
+        else toast('文件格式不正确');
+      } catch (err) { toast('解析失败'); }
+    };
+    reader.readAsText(f);
+    e.target.value = '';
+  });
+  $('#btnReset').addEventListener('click', function () {
+    if (!confirm('确定清空全部学习记录？该操作不可恢复。')) return;
+    Store.reset();
+    applySettings();
+    switchView('settings');
+    toast('已清空');
+  });
+
+  document.addEventListener('keydown', function (e) {
+    var learnActive = $('#view-learn').classList.contains('active');
+    if (e.key === 'Escape') { $('#modal').classList.add('hidden'); return; }
+    if (!learnActive || $('#modal').classList.contains('hidden') === false) return;
+    if (e.code === 'Space') { e.preventDefault(); flip(); }
+    else if (e.key === '1') rate(0);
+    else if (e.key === '2') rate(1);
+    else if (e.key === '3') rate(2);
+  });
+
+  /* ---------------- 启动 ---------------- */
+  applySettings();
+  renderLibrary();
+  renderStats();
+  updateSide();
+  startSession();
+  switchView('learn');
+})();
+
+</script>
+</body>
+</html>
