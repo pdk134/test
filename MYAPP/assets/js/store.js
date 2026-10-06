@@ -18,8 +18,15 @@ window.Store = (function () {
       updatedAt: 0,
       cards: {},
       stats: { reviewed: 0, correct: 0, streak: 0, lastDay: '', daily: {} },
-      settings: { dailyNew: 10, dailyReview: 60, autoSpeak: false, theme: 'dark' }
+      settings: { dailyNew: 10, dailyReview: 60, autoSpeak: false, theme: 'dark', bgm: false, bgmVol: 35 }
     };
+  }
+
+  /** 老数据 / 云端数据缺少新增设置项时补齐默认值 */
+  function fillSettings(s) {
+    var def = empty().settings, k;
+    for (k in def) if (s[k] === undefined) s[k] = def[k];
+    return s;
   }
 
   var data;
@@ -31,7 +38,7 @@ window.Store = (function () {
   if (!data.cards) data.cards = {};
   if (!data.stats) data.stats = empty().stats;
   if (!data.stats.daily) data.stats.daily = {};
-  if (!data.settings) data.settings = empty().settings;
+  data.settings = fillSettings(data.settings || {});
 
   var saveTimer = null, notify = true;
   function save() {
@@ -54,7 +61,7 @@ window.Store = (function () {
     if (!data.cards) data.cards = {};
     if (!data.stats) data.stats = empty().stats;
     if (!data.stats.daily) data.stats.daily = {};
-    if (!data.settings) data.settings = empty().settings;
+    data.settings = fillSettings(data.settings || {});
     notify = false;
     save();
     notify = true;

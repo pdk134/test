@@ -61,10 +61,12 @@
               <div class="fc-tags"><span class="tag" id="fCat"></span><span class="tag lv" id="fLv"></span></div>
               <div class="fc-term" id="fTerm"></div>
               <div class="fc-en" id="fEn"></div>
+              <div class="fc-ja" id="fJa"></div>
               <div class="fc-hint">点击卡片 / 按 空格 查看释义</div>
             </div>
             <div class="fc-face fc-back">
               <div class="fc-term-sm" id="bTerm"></div>
+              <div class="fc-ja" id="bJa"></div>
               <div class="fc-def" id="bDef"></div>
               <ul class="fc-points" id="bPoints"></ul>
               <div class="fc-eg"><span>场景</span><p id="bEg"></p></div>
@@ -98,6 +100,7 @@
       <div class="controls" id="controls">
         <button class="btn ghost" id="btnSpeak">朗读</button>
         <button class="btn ghost" id="btnFlip">翻卡 <kbd>空格</kbd></button>
+        <button class="btn ghost" id="btnBgm">♪ BGM</button>
       </div>
 
       <div class="rate disabled" id="rateBar">
@@ -226,6 +229,15 @@
           <label>翻卡后自动朗读</label>
           <input type="checkbox" id="setSpeak">
         </div>
+        <div class="form-row">
+          <label>学习背景音乐 BGM</label>
+          <input type="checkbox" id="setBgm">
+        </div>
+        <div class="form-row">
+          <label>BGM 音量</label>
+          <input type="range" id="setBgmVol" min="0" max="100" step="5">
+        </div>
+        <p class="muted">BGM 由浏览器实时合成的氛围音（和弦 + 铃音），不下载任何音频文件，离线也能播。</p>
       </div>
 
       <div class="panel">
@@ -246,6 +258,7 @@
           <li><kbd>1</kbd> 不认识</li>
           <li><kbd>2</kbd> 模糊</li>
           <li><kbd>3</kbd> 认识</li>
+          <li><kbd>B</kbd> BGM 开关</li>
           <li><kbd>Esc</kbd> 关闭弹窗</li>
         </ul>
       </div>
@@ -317,6 +330,7 @@
 <script src="assets/js/srs.js"></script>
 <script src="assets/js/config.js"></script>
 <script src="assets/js/sync.js"></script>
+<script src="assets/js/bgm.js"></script>
 <script src="assets/js/app.js"></script>
 </body>
 </html>
