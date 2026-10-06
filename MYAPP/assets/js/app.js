@@ -510,7 +510,8 @@
   });
   $('#btnClearCfg').addEventListener('click', function () {
     Sync.setConfig('', '');
-    toast('已清除云端配置，回到本地模式');
+    Sync.init();
+    toast('已恢复内置云端配置');
     renderAccount();
   });
   $('#btnSignIn').addEventListener('click', function () {

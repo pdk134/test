@@ -108,6 +108,11 @@ kbd {
 }
 .panel h3 { font-size: 15px; margin-bottom: 12px; }
 .panel-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.adv-config summary { cursor: pointer; font-size: 15px; font-weight: 600; list-style: none; }
+.adv-config summary::-webkit-details-marker { display: none; }
+.adv-config summary::before { content: '▸ '; color: var(--text-dim); }
+.adv-config[open] summary { margin-bottom: 12px; }
+.adv-config[open] summary::before { content: '▾ '; }
 .muted { color: var(--text-dim); font-size: 13px; }
 
 /* 进度条 */
@@ -546,9 +551,9 @@ input.wide { width: 60%; min-width: 180px; }
     </section>
     <!-- 账号 -->
     <section class="view" id="view-account">
-      <div class="panel">
-        <h3>云端服务配置</h3>
-        <p class="muted">填入 Supabase 项目的 URL 与 anon public key 后即可跨设备同步。配置只存在本机浏览器，不会写进代码仓库。</p>
+      <details class="panel adv-config">
+        <summary>高级：更换 / 自定义云端服务</summary>
+        <p class="muted">已内置默认 Supabase 项目，直接登录即可跨设备同步。想换成自己的项目，在这里覆盖（配置只存在本机浏览器，不会写进代码仓库）。</p>
         <div class="form-row">
           <label>Project URL</label>
           <input type="text" id="sbUrl" placeholder="https://xxxx.supabase.co" class="wide">
@@ -559,10 +564,10 @@ input.wide { width: 60%; min-width: 180px; }
         </div>
         <div class="sum-actions" style="justify-content:flex-start">
           <button class="btn primary" id="btnSaveCfg">保存配置</button>
-          <button class="btn ghost" id="btnClearCfg">清除配置</button>
+          <button class="btn ghost" id="btnClearCfg">恢复内置配置</button>
         </div>
-        <p class="muted" style="margin-top:10px">还没有 Supabase 项目？到 supabase.com 免费新建 → Settings → API 里复制这两个值，并在 SQL Editor 执行 README 中的建表语句。</p>
-      </div>
+        <p class="muted" style="margin-top:10px">换成自己的项目：到 supabase.com 新建 → Settings → API 复制这两个值，并在 SQL Editor 执行 README 中的建表语句。</p>
+      </details>
 
       <div class="panel" id="acctAuth">
         <h3>登录 / 注册</h3>
@@ -1070,13 +1075,17 @@ window.SRS = (function () {
 </script>
 <script>
 /**
- * Supabase 配置
- * 留空即可在「账号」页面里手动填写（配置存在浏览器 localStorage，不需要改代码重新部署）。
- * 也可以直接填在这里作为默认值：url 填 Project URL，anonKey 填 anon public key。
+ * Supabase 云端配置（已内置默认项目，开箱即用，无需手动填写）
+ *
+ * 说明：
+ * - url / anonKey 是 Supabase 项目的公开信息，anon key 只代表「未登录匿名角色」，
+ *   设计上就是放在前端代码里的；真正的安全边界是 progress 表的 RLS 策略（每人只能读写自己的那一行）。
+ * - 千万不要填 service_role / secret keys，那类 key 会绕过 RLS，泄露后任何人可读写全表。
+ * - 想换成自己的 Supabase 项目：直接改这里，或在「账号」页的「高级」里临时覆盖（存本机 localStorage）。
  */
 window.SUPABASE_CONFIG = {
-  url: '',
-  anonKey: ''
+  url: 'https://wyuhxtnchkndkrsfknlh.supabase.co',
+  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind5dWh4dG5jaGtuZGtyc2ZrbmxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEyNTI3NDYsImV4cCI6MjEwNjgyODc0Nn0.XUzq6y9IfC6HTdGXY6UrXI2Jb2tGbbzZ8yeRfIpUUyQ'
 };
 
 </script>
@@ -1800,7 +1809,8 @@ window.Sync = (function () {
   });
   $('#btnClearCfg').addEventListener('click', function () {
     Sync.setConfig('', '');
-    toast('已清除云端配置，回到本地模式');
+    Sync.init();
+    toast('已恢复内置云端配置');
     renderAccount();
   });
   $('#btnSignIn').addEventListener('click', function () {

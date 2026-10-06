@@ -99,6 +99,11 @@ kbd {
 }
 .panel h3 { font-size: 15px; margin-bottom: 12px; }
 .panel-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.adv-config summary { cursor: pointer; font-size: 15px; font-weight: 600; list-style: none; }
+.adv-config summary::-webkit-details-marker { display: none; }
+.adv-config summary::before { content: '▸ '; color: var(--text-dim); }
+.adv-config[open] summary { margin-bottom: 12px; }
+.adv-config[open] summary::before { content: '▾ '; }
 .muted { color: var(--text-dim); font-size: 13px; }
 
 /* 进度条 */

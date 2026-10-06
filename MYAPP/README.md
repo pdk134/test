@@ -112,13 +112,11 @@ MYAPP/
 }
 ```
 
-## 云端账号同步（可选）
+## 云端账号同步（开箱即用）
 
-手机和电脑登录同一账号即可同步进度。用的是 Supabase（免费额度足够个人使用），密钥直接填在站点「账号」页面，不必改代码重新部署。
+已内置 Supabase 项目（`assets/js/config.js`），**无需任何配置**：打开「账号」页 → 用邮箱 + 密码注册/登录，手机和电脑多端自动同步进度。
 
-**1. 建 Supabase 项目**：supabase.com 新建（Free 计划即可）。
-
-**2. SQL Editor 里执行建表语句**（含 RLS，保证每人只能读写自己的数据）：
+数据表结构：所有人共用一张 `progress` 表，**每个用户一行**，靠 RLS 策略隔离（只能读写 `user_id = auth.uid()` 的那一行）。
 
 ```sql
 create table if not exists public.progress (
@@ -135,21 +133,20 @@ create policy "own_progress" on public.progress
   with check (auth.uid() = user_id);
 ```
 
-**3. 取密钥**：Settings → API，复制 **Project URL** 和 **anon public key**。
+> anon key 是 Supabase 设计上可公开的前端密钥，它对应「未登录匿名角色」，已验证匿名直接查 `progress` 只会返回空数组 —— 真正的边界是上面的 RLS 策略。**千万不要把 `service_role` key 填进去**（它会绕过 RLS）。
 
-**4. 关掉邮箱验证（推荐）**：Authentication → Sign In / Providers → Email，关闭 *Confirm email*，否则注册后要先点邮件链接。
+### 想换成自己的 Supabase 项目
 
-**5. 站点配置**：打开「账号」页 → 填入 URL 与 anon key → 保存 → 用邮箱 + 密码注册/登录。
-
-**6. 另一台设备**：浏览器打开同一站点，填同样的配置（或什么都不填也行，配置只存在本机），登录同一账号即可。
+1. supabase.com 新建（Free 计划即可）→ **SQL Editor** 执行上面的建表语句
+2. **Settings → API** 复制 Project URL 和 anon public key
+3. **Authentication → Sign In / Providers → Email** 关闭 *Confirm email*（否则注册后要先点邮件链接）
+4. 改 `assets/js/config.js` 里的 `url` / `anonKey`，或在站点「账号」页 →「高级：更换 / 自定义云端服务」里临时覆盖（覆盖值只存在本机 localStorage，点「恢复内置配置」可还原）
 
 同步规则：
 - 本机有改动 → 2.5 秒后自动上传
 - 切回页面 / 每 2 分钟 → 自动拉取云端最新数据
 - 两端冲突时以 `updatedAt` 时间戳最新的一份为准（last-write-wins）
-- 未配置或未登录时完全等同之前的纯本地模式
-
-> anon key 是设计为可公开的前端密钥，安全性由上面的 RLS 策略保证；请不要把 service_role key 填进去。
+- 未登录时完全等同之前的纯本地模式
 
 ## 数据说明
 
