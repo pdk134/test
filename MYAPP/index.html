@@ -252,9 +252,9 @@
     </section>
     <!-- 账号 -->
     <section class="view" id="view-account">
-      <div class="panel">
-        <h3>云端服务配置</h3>
-        <p class="muted">填入 Supabase 项目的 URL 与 anon public key 后即可跨设备同步。配置只存在本机浏览器，不会写进代码仓库。</p>
+      <details class="panel adv-config">
+        <summary>高级：更换 / 自定义云端服务</summary>
+        <p class="muted">已内置默认 Supabase 项目，直接登录即可跨设备同步。想换成自己的项目，在这里覆盖（配置只存在本机浏览器，不会写进代码仓库）。</p>
         <div class="form-row">
           <label>Project URL</label>
           <input type="text" id="sbUrl" placeholder="https://xxxx.supabase.co" class="wide">
@@ -265,10 +265,10 @@
         </div>
         <div class="sum-actions" style="justify-content:flex-start">
           <button class="btn primary" id="btnSaveCfg">保存配置</button>
-          <button class="btn ghost" id="btnClearCfg">清除配置</button>
+          <button class="btn ghost" id="btnClearCfg">恢复内置配置</button>
         </div>
-        <p class="muted" style="margin-top:10px">还没有 Supabase 项目？到 supabase.com 免费新建 → Settings → API 里复制这两个值，并在 SQL Editor 执行 README 中的建表语句。</p>
-      </div>
+        <p class="muted" style="margin-top:10px">换成自己的项目：到 supabase.com 新建 → Settings → API 复制这两个值，并在 SQL Editor 执行 README 中的建表语句。</p>
+      </details>
 
       <div class="panel" id="acctAuth">
         <h3>登录 / 注册</h3>
