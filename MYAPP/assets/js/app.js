@@ -159,6 +159,7 @@
     card.classList.toggle('flipped');
     var flipped = card.classList.contains('flipped');
     $('#rateBar').classList.toggle('disabled', !flipped);
+    if (window.Sfx) Sfx.flip();
     if (flipped && !Store.data.settings.autoSpeak) { /* 翻到背面不自动朗读，避免打断阅读 */ }
   }
 
@@ -166,6 +167,7 @@
     if ($('#rateBar').classList.contains('disabled')) return;
     var item = session.items[session.idx];
     if (!item) return;
+    if (window.Sfx) { if (r === 2) Sfx.correct(); else if (r === 1) Sfx.fuzzy(); else Sfx.wrong(); }
     var c = Store.card(item.id);
     SRS.schedule(c, r);
     Store.record(item.kind, r === 2);
@@ -341,6 +343,7 @@
   function answer(btn) {
     var q = quiz.list[quiz.i], t = byId[q.id];
     var ok = btn.getAttribute('data-id') === q.id;
+    if (window.Sfx) { if (ok) Sfx.correct(); else Sfx.wrong(); }
     var btns = document.querySelectorAll('#quizOptions .opt');
     for (var i = 0; i < btns.length; i++) {
       btns[i].disabled = true;
@@ -457,7 +460,10 @@
     $('#setSpeak').checked = !!s.autoSpeak;
     $('#setBgm').checked = !!s.bgm;
     $('#setBgmVol').value = s.bgmVol || 35;
+    $('#setSfx').checked = s.sfx !== false;
+    $('#setSfxVol').value = s.sfxVol || 60;
     if (window.Bgm) Bgm.setVolume((s.bgmVol || 35) / 100);
+    if (window.Sfx) { Sfx.setEnabled(s.sfx !== false); Sfx.setVolume((s.sfxVol || 60) / 100); }
     document.documentElement.setAttribute('data-theme', s.theme);
     $('#themeBtn').textContent = s.theme === 'dark' ? '☾' : '☀';
     updateBgmBtn();
@@ -466,12 +472,12 @@
   /* ---------------- 事件绑定 ---------------- */
   $('#nav').addEventListener('click', function (e) {
     var btn = e.target.closest('.nav-item');
-    if (btn) switchView(btn.getAttribute('data-view'));
+    if (btn) { if (window.Sfx) Sfx.click(); switchView(btn.getAttribute('data-view')); }
   });
 
   document.addEventListener('click', function (e) {
     var jump = e.target.closest('[data-view]');
-    if (jump && !jump.classList.contains('nav-item')) switchView(jump.getAttribute('data-view'));
+    if (jump && !jump.classList.contains('nav-item')) { if (window.Sfx) Sfx.click(); switchView(jump.getAttribute('data-view')); }
   });
 
   $('#flashcard').addEventListener('click', flip);
@@ -528,6 +534,20 @@
     if (window.Bgm) Bgm.setVolume(+e.target.value / 100);
   });
   $('#setBgmVol').addEventListener('change', function () { Store.touch(); });
+  $('#setSfx').addEventListener('change', function (e) {
+    Store.data.settings.sfx = e.target.checked;
+    Store.touch();
+    if (window.Sfx) Sfx.setEnabled(e.target.checked);
+    if (e.target.checked && window.Sfx) Sfx.click();
+  });
+  $('#setSfxVol').addEventListener('input', function (e) {
+    Store.data.settings.sfxVol = +e.target.value;
+    if (window.Sfx) Sfx.setVolume(+e.target.value / 100);
+  });
+  $('#setSfxVol').addEventListener('change', function () {
+    Store.touch();
+    if (window.Sfx && Store.data.settings.sfx !== false) Sfx.click(); // 松手时试听一下
+  });
   $('#btnBgm').addEventListener('click', function () { setBgm(!Store.data.settings.bgm, true); });
   $('#themeBtn').addEventListener('click', function () {
     var s = Store.data.settings;

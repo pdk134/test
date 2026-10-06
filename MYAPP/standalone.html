@@ -538,7 +538,15 @@ input.wide { width: 60%; min-width: 180px; }
           <label>BGM 音量</label>
           <input type="range" id="setBgmVol" min="0" max="100" step="5">
         </div>
-        <p class="muted">BGM 由浏览器实时合成的氛围音（和弦 + 铃音），不下载任何音频文件，离线也能播。</p>
+        <div class="form-row">
+          <label>操作音效</label>
+          <input type="checkbox" id="setSfx">
+        </div>
+        <div class="form-row">
+          <label>音效音量</label>
+          <input type="range" id="setSfxVol" min="0" max="100" step="5">
+        </div>
+        <p class="muted">BGM 与音效都由浏览器实时合成（和弦垫 + 铃音 / 答对上行三音、答错下行滑音），不下载任何音频文件，离线也能播。音效包含：答对、答错、模糊、翻卡、界面切换。</p>
       </div>
 
       <div class="panel">
@@ -1397,7 +1405,7 @@ window.Store = (function () {
       updatedAt: 0,
       cards: {},
       stats: { reviewed: 0, correct: 0, streak: 0, lastDay: '', daily: {} },
-      settings: { dailyNew: 10, dailyReview: 60, autoSpeak: false, theme: 'dark', bgm: false, bgmVol: 35 }
+      settings: { dailyNew: 10, dailyReview: 60, autoSpeak: false, theme: 'dark', bgm: false, bgmVol: 35, sfx: true, sfxVol: 60 }
     };
   }
 
@@ -1802,10 +1810,32 @@ window.Sync = (function () {
 </script>
 <script>
 /**
- * 学习背景音乐（BGM）
- * 用 Web Audio API 实时合成一段舒缓的循环氛围音：低音 + 和弦垫 + 五声音阶铃音。
- * 优点：不需要任何音频文件，单文件版/离线也能播，体积极小，永远不重复听腻（带随机）。
+ * 学习背景音乐（BGM）+ 操作音效（Sfx）
+ * 全部用 Web Audio API 实时合成：不需要任何音频文件，单文件版 / 离线也能出声。
+ *
+ * Bgm：低音 + 和弦垫 + 五声音阶铃音的舒缓循环氛围音
+ * Sfx：答对 / 答错 / 模糊 / 翻卡 / 界面切换 的短音效
  */
+
+/** 共用的 AudioContext：移动端对同时存在的音频实例数量有限制，BGM 与音效共用一个 */
+var AudioKit = (function () {
+  var ctx = null;
+  return {
+    get: function () {
+      if (ctx) return ctx;
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      try { ctx = new AC(); } catch (e) { return null; }
+      return ctx;
+    },
+    resume: function () {
+      var c = this.get();
+      if (c && c.state === 'suspended') c.resume();
+    }
+  };
+})();
+
+/* ============================ BGM ============================ */
 window.Bgm = (function () {
   var ctx = null, master = null, filter = null;
   var timer = null, playing = false, pending = false;
@@ -1827,9 +1857,8 @@ window.Bgm = (function () {
 
   function ensure() {
     if (ctx) return ctx;
-    var AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return null;
-    try { ctx = new AC(); } catch (e) { return null; }
+    ctx = AudioKit.get();
+    if (!ctx) return null;
     master = ctx.createGain();
     master.gain.value = 0;
     filter = ctx.createBiquadFilter();
@@ -1898,7 +1927,7 @@ window.Bgm = (function () {
 
   function start() {
     if (!ensure()) return false;
-    if (ctx.state === 'suspended') ctx.resume();
+    AudioKit.resume();
     if (playing) return true;
     playing = true;
     pending = false;
@@ -1951,6 +1980,77 @@ window.Bgm = (function () {
       vol = Math.max(0, Math.min(1, v));
       if (playing) fade(vol, 0.25);
     }
+  };
+})();
+
+/* ============================ 音效 ============================ */
+window.Sfx = (function () {
+  var enabled = true, vol = 0.6, bus = null;
+
+  function mtof(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+
+  function out() {
+    var ctx = AudioKit.get();
+    if (!ctx) return null;
+    if (!bus) {
+      bus = ctx.createGain();
+      bus.gain.value = vol;
+      bus.connect(ctx.destination);
+    }
+    return ctx;
+  }
+
+  /** 一个音：note 音高，at 延迟秒，dur 时长，peak 峰值，type 波形，glide 滑音目标音高 */
+  function note(noteNum, at, dur, peak, type, glide) {
+    var ctx = out();
+    if (!ctx || !enabled) return;
+    AudioKit.resume();
+    var t = ctx.currentTime + at;
+    var g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(peak, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    g.connect(bus);
+    var o = ctx.createOscillator();
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(mtof(noteNum), t);
+    if (glide) o.frequency.exponentialRampToValueAtTime(mtof(glide), t + dur * 0.9);
+    o.connect(g);
+    o.start(t);
+    o.stop(t + dur + 0.05);
+  }
+
+  return {
+    /** 答对：明亮的上行三音 C5-E5-G5 */
+    correct: function () {
+      note(76, 0, 0.18, 0.22, 'triangle');
+      note(79, 0.09, 0.18, 0.20, 'triangle');
+      note(84, 0.18, 0.34, 0.18, 'sine');
+    },
+    /** 答错：低沉的下行两音，带轻微下滑 */
+    wrong: function () {
+      note(65, 0, 0.26, 0.20, 'triangle', 62);
+      note(58, 0.12, 0.34, 0.16, 'sine', 55);
+    },
+    /** 模糊：一个中性的单音，表示「记住了但不牢」 */
+    fuzzy: function () {
+      note(72, 0, 0.22, 0.16, 'sine');
+    },
+    /** 翻卡：短促清脆的「嗒」 */
+    flip: function () {
+      note(88, 0, 0.07, 0.12, 'sine');
+      note(81, 0.03, 0.10, 0.07, 'triangle');
+    },
+    /** 界面切换：极短的轻声点击 */
+    click: function () {
+      note(84, 0, 0.05, 0.08, 'sine');
+    },
+    setEnabled: function (v) { enabled = !!v; },
+    setVolume: function (v) {
+      vol = Math.max(0, Math.min(1, v));
+      if (bus) bus.gain.value = vol;
+    },
+    isEnabled: function () { return enabled; }
   };
 })();
 
@@ -2117,6 +2217,7 @@ window.Bgm = (function () {
     card.classList.toggle('flipped');
     var flipped = card.classList.contains('flipped');
     $('#rateBar').classList.toggle('disabled', !flipped);
+    if (window.Sfx) Sfx.flip();
     if (flipped && !Store.data.settings.autoSpeak) { /* 翻到背面不自动朗读，避免打断阅读 */ }
   }
 
@@ -2124,6 +2225,7 @@ window.Bgm = (function () {
     if ($('#rateBar').classList.contains('disabled')) return;
     var item = session.items[session.idx];
     if (!item) return;
+    if (window.Sfx) { if (r === 2) Sfx.correct(); else if (r === 1) Sfx.fuzzy(); else Sfx.wrong(); }
     var c = Store.card(item.id);
     SRS.schedule(c, r);
     Store.record(item.kind, r === 2);
@@ -2299,6 +2401,7 @@ window.Bgm = (function () {
   function answer(btn) {
     var q = quiz.list[quiz.i], t = byId[q.id];
     var ok = btn.getAttribute('data-id') === q.id;
+    if (window.Sfx) { if (ok) Sfx.correct(); else Sfx.wrong(); }
     var btns = document.querySelectorAll('#quizOptions .opt');
     for (var i = 0; i < btns.length; i++) {
       btns[i].disabled = true;
@@ -2415,7 +2518,10 @@ window.Bgm = (function () {
     $('#setSpeak').checked = !!s.autoSpeak;
     $('#setBgm').checked = !!s.bgm;
     $('#setBgmVol').value = s.bgmVol || 35;
+    $('#setSfx').checked = s.sfx !== false;
+    $('#setSfxVol').value = s.sfxVol || 60;
     if (window.Bgm) Bgm.setVolume((s.bgmVol || 35) / 100);
+    if (window.Sfx) { Sfx.setEnabled(s.sfx !== false); Sfx.setVolume((s.sfxVol || 60) / 100); }
     document.documentElement.setAttribute('data-theme', s.theme);
     $('#themeBtn').textContent = s.theme === 'dark' ? '☾' : '☀';
     updateBgmBtn();
@@ -2424,12 +2530,12 @@ window.Bgm = (function () {
   /* ---------------- 事件绑定 ---------------- */
   $('#nav').addEventListener('click', function (e) {
     var btn = e.target.closest('.nav-item');
-    if (btn) switchView(btn.getAttribute('data-view'));
+    if (btn) { if (window.Sfx) Sfx.click(); switchView(btn.getAttribute('data-view')); }
   });
 
   document.addEventListener('click', function (e) {
     var jump = e.target.closest('[data-view]');
-    if (jump && !jump.classList.contains('nav-item')) switchView(jump.getAttribute('data-view'));
+    if (jump && !jump.classList.contains('nav-item')) { if (window.Sfx) Sfx.click(); switchView(jump.getAttribute('data-view')); }
   });
 
   $('#flashcard').addEventListener('click', flip);
@@ -2486,6 +2592,20 @@ window.Bgm = (function () {
     if (window.Bgm) Bgm.setVolume(+e.target.value / 100);
   });
   $('#setBgmVol').addEventListener('change', function () { Store.touch(); });
+  $('#setSfx').addEventListener('change', function (e) {
+    Store.data.settings.sfx = e.target.checked;
+    Store.touch();
+    if (window.Sfx) Sfx.setEnabled(e.target.checked);
+    if (e.target.checked && window.Sfx) Sfx.click();
+  });
+  $('#setSfxVol').addEventListener('input', function (e) {
+    Store.data.settings.sfxVol = +e.target.value;
+    if (window.Sfx) Sfx.setVolume(+e.target.value / 100);
+  });
+  $('#setSfxVol').addEventListener('change', function () {
+    Store.touch();
+    if (window.Sfx && Store.data.settings.sfx !== false) Sfx.click(); // 松手时试听一下
+  });
   $('#btnBgm').addEventListener('click', function () { setBgm(!Store.data.settings.bgm, true); });
   $('#themeBtn').addEventListener('click', function () {
     var s = Store.data.settings;

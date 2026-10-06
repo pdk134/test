@@ -237,7 +237,15 @@
           <label>BGM 音量</label>
           <input type="range" id="setBgmVol" min="0" max="100" step="5">
         </div>
-        <p class="muted">BGM 由浏览器实时合成的氛围音（和弦 + 铃音），不下载任何音频文件，离线也能播。</p>
+        <div class="form-row">
+          <label>操作音效</label>
+          <input type="checkbox" id="setSfx">
+        </div>
+        <div class="form-row">
+          <label>音效音量</label>
+          <input type="range" id="setSfxVol" min="0" max="100" step="5">
+        </div>
+        <p class="muted">BGM 与音效都由浏览器实时合成（和弦垫 + 铃音 / 答对上行三音、答错下行滑音），不下载任何音频文件，离线也能播。音效包含：答对、答错、模糊、翻卡、界面切换。</p>
       </div>
 
       <div class="panel">
