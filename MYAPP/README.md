@@ -15,17 +15,9 @@ python -m http.server 8000
 # 浏览器打开 http://localhost:8000
 ```
 
-3. **手机离线使用**：先生成单文件版，再传到手机
+3. **手机随时访问**：直接用下面部署好的 GitHub Pages 地址，不用打包、也不用连同一个 WiFi。
 
-```bash
-python build_standalone.py     # 生成 standalone.html（全部 CSS/JS 已内联）
-```
-
-把 `standalone.html` 通过微信/QQ 文件传输助手或数据线发到手机，用浏览器打开即可（无需网络）。
-每次更新术语库后重新执行一次打包脚本。
-
-> iOS 若无法用浏览器打开本地 HTML，可退回方式 2（同 WiFi 下访问 `http://电脑IP:8000`）。
-> 学习进度存在各自浏览器本地，手机与电脑不互通，可用「设置 → 导出/导入 JSON」迁移。
+> 学习进度默认存在浏览器本地；手机与电脑登录同一账号即可自动同步（见「云端账号同步」），也可以在「设置 → 数据」里用 JSON 导出/导入迁移。
 
 ## 部署到 GitHub Pages（手机随时访问）
 
@@ -59,9 +51,7 @@ git push origin nanana          # 不会触发部署
 
 ```
 MYAPP/
-├── index.html              页面结构
-├── build_standalone.py      打包生成手机用的单文件版
-├── standalone.html          打包产物（生成后可独立分发）
+├── index.html              页面结构（GitHub Pages 就是发布这个目录）
 ├── assets/
 │   ├── css/style.css       样式（深色 / 浅色主题）
 │   └── js/
