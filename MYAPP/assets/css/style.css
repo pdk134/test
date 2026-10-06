@@ -186,12 +186,21 @@ kbd {
 
 /* 词库 */
 .toolbar { display: flex; gap: 10px; margin-bottom: 14px; }
-input[type="search"], select {
+input[type="search"], input[type="text"], input[type="email"], input[type="password"], select {
   background: var(--panel); border: 1px solid var(--line); color: var(--text);
   border-radius: 11px; padding: 10px 14px; font-size: 14px; font-family: inherit;
 }
+input[type="search"]:focus, input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus, select:focus {
+  outline: none; border-color: var(--accent);
+}
 input[type="search"] { flex: 1; }
-input[type="search"]:focus, select:focus { outline: none; border-color: var(--accent); }
+input.wide { width: 60%; min-width: 180px; }
+.acct-box {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 12px 14px; background: var(--panel-2); border-radius: 12px;
+}
+.acct-box b { display: block; font-size: 15px; margin-bottom: 4px; }
+.side-user { float: right; color: var(--accent); font-size: 11px; }
 .lib-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
 .lib-item {
   background: var(--panel); border: 1px solid var(--line); border-radius: 14px;

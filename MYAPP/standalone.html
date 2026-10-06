@@ -195,12 +195,21 @@ kbd {
 
 /* 词库 */
 .toolbar { display: flex; gap: 10px; margin-bottom: 14px; }
-input[type="search"], select {
+input[type="search"], input[type="text"], input[type="email"], input[type="password"], select {
   background: var(--panel); border: 1px solid var(--line); color: var(--text);
   border-radius: 11px; padding: 10px 14px; font-size: 14px; font-family: inherit;
 }
+input[type="search"]:focus, input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus, select:focus {
+  outline: none; border-color: var(--accent);
+}
 input[type="search"] { flex: 1; }
-input[type="search"]:focus, select:focus { outline: none; border-color: var(--accent); }
+input.wide { width: 60%; min-width: 180px; }
+.acct-box {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 12px 14px; background: var(--panel-2); border-radius: 12px;
+}
+.acct-box b { display: block; font-size: 15px; margin-bottom: 4px; }
+.side-user { float: right; color: var(--accent); font-size: 11px; }
 .lib-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
 .lib-item {
   background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
@@ -309,10 +318,11 @@ input[type="search"]:focus, select:focus { outline: none; border-color: var(--ac
       <button class="nav-item" data-view="quiz"><span class="ic">✓</span>测试</button>
       <button class="nav-item" data-view="stats"><span class="ic">▲</span>统计</button>
       <button class="nav-item" data-view="settings"><span class="ic">⚙</span>设置</button>
+      <button class="nav-item" data-view="account"><span class="ic">☺</span>账号</button>
     </nav>
 
     <div class="side-card">
-      <div class="side-title">今日进度</div>
+      <div class="side-title">今日进度<span id="sideUser" class="side-user"></span></div>
       <div class="side-row"><span>新学</span><b id="sideNew">0</b></div>
       <div class="side-row"><span>复习</span><b id="sideRev">0</b></div>
       <div class="side-row"><span>连续天数</span><b id="sideStreak">0</b></div>
@@ -534,6 +544,55 @@ input[type="search"]:focus, select:focus { outline: none; border-color: var(--ac
         </ul>
       </div>
     </section>
+    <!-- 账号 -->
+    <section class="view" id="view-account">
+      <div class="panel">
+        <h3>云端服务配置</h3>
+        <p class="muted">填入 Supabase 项目的 URL 与 anon public key 后即可跨设备同步。配置只存在本机浏览器，不会写进代码仓库。</p>
+        <div class="form-row">
+          <label>Project URL</label>
+          <input type="text" id="sbUrl" placeholder="https://xxxx.supabase.co" class="wide">
+        </div>
+        <div class="form-row">
+          <label>anon key</label>
+          <input type="password" id="sbKey" placeholder="eyJhbGciOi..." class="wide">
+        </div>
+        <div class="sum-actions" style="justify-content:flex-start">
+          <button class="btn primary" id="btnSaveCfg">保存配置</button>
+          <button class="btn ghost" id="btnClearCfg">清除配置</button>
+        </div>
+        <p class="muted" style="margin-top:10px">还没有 Supabase 项目？到 supabase.com 免费新建 → Settings → API 里复制这两个值，并在 SQL Editor 执行 README 中的建表语句。</p>
+      </div>
+
+      <div class="panel" id="acctAuth">
+        <h3>登录 / 注册</h3>
+        <div class="form-row">
+          <label>邮箱</label>
+          <input type="email" id="acctEmail" placeholder="you@example.com" class="wide">
+        </div>
+        <div class="form-row">
+          <label>密码</label>
+          <input type="password" id="acctPwd" placeholder="至少 6 位" class="wide">
+        </div>
+        <div class="sum-actions" style="justify-content:flex-start">
+          <button class="btn primary" id="btnSignIn">登录</button>
+          <button class="btn ghost" id="btnSignUp">注册</button>
+        </div>
+      </div>
+
+      <div class="panel hidden" id="acctUser">
+        <h3>已登录</h3>
+        <div class="acct-box">
+          <div><b id="acctEmailShow"></b><span class="muted" id="acctSyncInfo"></span></div>
+          <span class="badge" id="acctStatus"></span>
+        </div>
+        <div class="sum-actions" style="justify-content:flex-start">
+          <button class="btn primary" id="btnSyncNow">立即同步</button>
+          <button class="btn ghost" id="btnSignOut">退出登录</button>
+        </div>
+        <p class="muted" style="margin-top:10px">两端都在线时会自动同步：本机改动 2.5 秒后上传，切回页面时拉取云端最新数据。</p>
+      </div>
+    </section>
   </main>
 </div>
 
@@ -546,6 +605,7 @@ input[type="search"]:focus, select:focus { outline: none; border-color: var(--ac
 
 <div class="toast" id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 /**
  * 术语库（样例数据，后续直接往数组里加即可，无需改动其他代码）
@@ -832,6 +892,7 @@ window.Store = (function () {
   function empty() {
     return {
       v: 1,
+      updatedAt: 0,
       cards: {},
       stats: { reviewed: 0, correct: 0, streak: 0, lastDay: '', daily: {} },
       settings: { dailyNew: 10, dailyReview: 60, autoSpeak: false, theme: 'dark' }
@@ -849,12 +910,31 @@ window.Store = (function () {
   if (!data.stats.daily) data.stats.daily = {};
   if (!data.settings) data.settings = empty().settings;
 
-  var saveTimer = null;
+  var saveTimer = null, notify = true;
   function save() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(function () {
       try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {}
     }, 120);
+    if (notify && window.Sync && window.Sync.isReady()) window.Sync.schedulePush();
+  }
+
+  /** 数据发生变化时调用：刷新时间戳 + 落盘 + 通知云端同步 */
+  function touch() {
+    data.updatedAt = Date.now();
+    save();
+  }
+
+  /** 用云端数据整体替换本地（不触发反向推送） */
+  function replace(remote) {
+    data = remote;
+    if (!data.cards) data.cards = {};
+    if (!data.stats) data.stats = empty().stats;
+    if (!data.stats.daily) data.stats.daily = {};
+    if (!data.settings) data.settings = empty().settings;
+    notify = false;
+    save();
+    notify = true;
   }
 
   function dayKey(ts) {
@@ -889,7 +969,7 @@ window.Store = (function () {
       s.streak = s.lastDay === y ? s.streak + 1 : 1;
       s.lastDay = k;
     }
-    save();
+    touch();
   }
 
   function dailyCounts() {
@@ -907,19 +987,27 @@ window.Store = (function () {
     return arr;
   }
 
-  return {
-    data: data,
+  var api = {
     save: save,
+    touch: touch,
+    replace: replace,
     card: card,
     raw: function (id) { return data.cards[id] || null; },
     record: record,
     dailyCounts: dailyCounts,
     last7: last7,
     dayKey: dayKey,
-    reset: function () { data = empty(); save(); },
-    load: function (obj) { if (obj && obj.cards) { data = obj; save(); return true; } return false; },
+    reset: function () { data = empty(); touch(); },
+    load: function (obj) {
+      if (obj && obj.cards) { replace(obj); touch(); return true; }
+      return false;
+    },
     exportText: function () { return JSON.stringify(data, null, 2); }
   };
+
+  // data 指向会随「云端数据替换」变化，这里用 getter 保证外部始终拿到最新对象
+  Object.defineProperty(api, 'data', { get: function () { return data; } });
+  return api;
 })();
 
 </script>
@@ -981,6 +1069,225 @@ window.SRS = (function () {
 
 </script>
 <script>
+/**
+ * Supabase 配置
+ * 留空即可在「账号」页面里手动填写（配置存在浏览器 localStorage，不需要改代码重新部署）。
+ * 也可以直接填在这里作为默认值：url 填 Project URL，anonKey 填 anon public key。
+ */
+window.SUPABASE_CONFIG = {
+  url: '',
+  anonKey: ''
+};
+
+</script>
+<script>
+/**
+ * 云端同步层（Supabase）
+ * - 账号：邮箱 + 密码（Supabase Auth）
+ * - 数据：每个用户一行 { user_id, data(jsonb), updated_at }，靠 RLS 保证只能读写自己的那一行
+ * - 冲突策略：每个用户只存一条整份快照，按 updatedAt 取最新的（last-write-wins）
+ */
+window.Sync = (function () {
+  var CFG_KEY = 'arch-term-supabase-config';
+  var TABLE = 'progress';
+  var client = null;
+  var cfg = null;
+  var user = null;
+  var listeners = [];
+  var pushTimer = null;
+  var state = { status: 'off', message: '', lastSync: 0, email: '' };
+
+  function emit(msg) {
+    if (msg) state.message = msg;
+    for (var i = 0; i < listeners.length; i++) listeners[i](state);
+  }
+
+  function loadConfig() {
+    try { cfg = JSON.parse(localStorage.getItem(CFG_KEY)) || null; } catch (e) { cfg = null; }
+    if (!cfg || !cfg.url || !cfg.key) {
+      var d = window.SUPABASE_CONFIG || {};
+      cfg = (d.url && d.anonKey) ? { url: d.url, key: d.anonKey } : null;
+    }
+    return cfg;
+  }
+
+  function setConfig(url, key) {
+    localStorage.setItem(CFG_KEY, JSON.stringify({ url: (url || '').trim(), key: (key || '').trim() }));
+    client = null;
+    loadConfig();
+  }
+
+  function clientNow() {
+    if (!cfg) { state.status = 'off'; return null; }
+    if (!window.supabase || !window.supabase.createClient) {
+      state.status = 'error';
+      state.message = 'Supabase SDK 未加载，请联网后重试';
+      return null;
+    }
+    if (!client) client = window.supabase.createClient(cfg.url, cfg.key);
+    return client;
+  }
+
+  function fail(e) {
+    state.status = 'error';
+    state.message = (e && (e.message || e.error_description || e)) || '请求失败';
+    emit();
+  }
+
+  /* ---------------- 拉取 / 推送 ---------------- */
+  async function pull(fromInit) {
+    var c = clientNow();
+    if (!c || !user) return false;
+    try {
+      var res = await c.from(TABLE).select('*').eq('user_id', user.id).maybeSingle();
+      if (res.error) { fail(res.error); return false; }
+      var remote = res.data;
+      var localTs = Store.data.updatedAt || 0;
+      if (!remote) {
+        await push(true);
+        state.lastSync = Date.now();
+        emit('云端还没有数据，已上传本机进度');
+      } else if (remote.updated_at > localTs + 1000) {
+        Store.replace(remote.data);
+        state.lastSync = Date.now();
+        emit(fromInit ? '已从云端恢复进度' : '已同步（采用云端最新数据）');
+      } else if (remote.updated_at + 1000 < localTs) {
+        await push(true);
+        state.lastSync = Date.now();
+        emit('已上传本机最新进度');
+      } else {
+        state.lastSync = Date.now();
+        emit('两端数据一致');
+      }
+      state.status = 'ready';
+      emit();
+      return true;
+    } catch (e) { fail(e); return false; }
+  }
+
+  async function push(force) {
+    var c = clientNow();
+    if (!c || !user) return false;
+    try {
+      var res = await c.from(TABLE).upsert(
+        { user_id: user.id, data: Store.data, updated_at: Store.data.updatedAt || Date.now() },
+        { onConflict: 'user_id' }
+      );
+      if (res.error) { fail(res.error); return false; }
+      state.lastSync = Date.now();
+      if (force) emit('已上传到云端');
+      else emit();
+      return true;
+    } catch (e) { fail(e); return false; }
+  }
+
+  function schedulePush() {
+    if (!isReady()) return;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(function () { push(false); }, 2500);
+  }
+
+  /* ---------------- 账号 ---------------- */
+  async function bootstrap() {
+    var c = clientNow();
+    if (!c) return;
+    state.status = 'syncing';
+    emit('正在同步…');
+    await pull(true);
+  }
+
+  async function signUp(email, password) {
+    var c = clientNow();
+    if (!c) { state.status = 'error'; state.message = '请先填写 Supabase 配置'; emit(); return false; }
+    try {
+      var res = await c.auth.signUp({ email: email, password: password });
+      if (res.error) { fail(res.error); return false; }
+      if (!res.data.session) {
+        state.status = 'ready';
+        state.message = '注册成功，请先到邮箱点确认链接后再登录（也可在 Supabase 后台关闭邮箱验证）';
+        emit();
+        return false;
+      }
+      user = res.data.user;
+      state.email = user.email;
+      await bootstrap();
+      return true;
+    } catch (e) { fail(e); return false; }
+  }
+
+  async function signIn(email, password) {
+    var c = clientNow();
+    if (!c) { state.status = 'error'; state.message = '请先填写 Supabase 配置'; emit(); return false; }
+    try {
+      var res = await c.auth.signInWithPassword({ email: email, password: password });
+      if (res.error) { fail(res.error); return false; }
+      user = res.data.user;
+      state.email = user.email;
+      await bootstrap();
+      return true;
+    } catch (e) { fail(e); return false; }
+  }
+
+  async function signOut() {
+    var c = clientNow();
+    user = null;
+    state.status = 'off';
+    state.email = '';
+    state.message = '已退出登录，数据仍保留在本机';
+    if (c) { try { await c.auth.signOut(); } catch (e) {} }
+    emit();
+  }
+
+  /* ---------------- 初始化 ---------------- */
+  var inited = false;
+  async function init() {
+    if (inited) { loadConfig(); client = null; clientNow(); emit(); return; }
+    inited = true;
+    loadConfig();
+    var c = clientNow();
+    if (!c) { emit(state.message || '未配置 Supabase，当前为纯本地模式'); return; }
+    try {
+      var res = await c.auth.getSession();
+      user = (res.data && res.data.session && res.data.session.user) || null;
+      state.email = user ? user.email : '';
+      if (user) { await bootstrap(); } else { state.status = 'ready'; emit('未登录，数据只存在本机'); }
+    } catch (e) { fail(e); }
+    c.auth.onAuthStateChange(function (_e, session) {
+      user = session ? session.user : null;
+      state.email = user ? user.email : '';
+      if (user) bootstrap(); else { state.status = 'ready'; emit('未登录，数据只存在本机'); }
+    });
+
+    setInterval(function () {
+      if (isReady() && document.visibilityState === 'visible') pull(false);
+    }, 120000);
+    document.addEventListener('visibilitychange', function () {
+      if (isReady() && document.visibilityState === 'visible') pull(false);
+    });
+    window.addEventListener('pagehide', function () { if (isReady()) push(true); });
+  }
+
+  function isReady() { return !!(cfg && user && client); }
+
+  return {
+    init: init,
+    state: function () { return state; },
+    isReady: isReady,
+    hasConfig: function () { return !!cfg; },
+    config: function () { return cfg; },
+    setConfig: setConfig,
+    signIn: signIn,
+    signUp: signUp,
+    signOut: signOut,
+    pull: function () { return pull(false); },
+    push: function () { return push(true); },
+    schedulePush: schedulePush,
+    onChange: function (fn) { listeners.push(fn); }
+  };
+})();
+
+</script>
+<script>
 /* 架构术语学习通 —— 交互逻辑 */
 (function () {
   'use strict';
@@ -1002,7 +1309,8 @@ window.SRS = (function () {
     library: ['术语词库', '浏览、检索全部术语，支持按分类与状态筛选'],
     quiz: ['选择题测试', '术语 ↔ 释义 双向考察，答错自动进入难词本'],
     stats: ['学习统计', '掌握进度、每日学习量与难词本'],
-    settings: ['设置', '学习计划、数据备份与快捷键']
+    settings: ['设置', '学习计划、数据备份与快捷键'],
+    account: ['账号与同步', '登录后可在手机与电脑之间同步学习进度']
   };
 
   function switchView(name) {
@@ -1015,6 +1323,7 @@ window.SRS = (function () {
     if (name === 'learn') { if (!session.items.length) startSession(); else renderCard(); }
     if (name === 'library') renderLibrary();
     if (name === 'stats') renderStats();
+    if (name === 'account') renderAccount();
     window.scrollTo(0, 0);
   }
 
@@ -1174,6 +1483,41 @@ window.SRS = (function () {
     $('#sideNew').textContent = d.n;
     $('#sideRev').textContent = d.r;
     $('#sideStreak').textContent = d.streak;
+    var s = Sync.state();
+    $('#sideUser').textContent = s.email ? '· ' + s.email.split('@')[0] : '· 本地模式';
+  }
+
+  /* ---------------- 账号与同步 ---------------- */
+  var STATUS_TEXT = { off: '未同步', ready: '已连接', syncing: '同步中', error: '异常' };
+  var lastDataRef = null;
+
+  function renderAccount() {
+    var s = Sync.state(), cfg = Sync.config();
+    $('#sbUrl').value = cfg ? cfg.url : '';
+    $('#sbKey').value = cfg ? cfg.key : '';
+    var logged = !!s.email;
+    $('#acctAuth').classList.toggle('hidden', logged);
+    $('#acctUser').classList.toggle('hidden', !logged);
+    if (logged) {
+      $('#acctEmailShow').textContent = s.email;
+      $('#acctStatus').textContent = STATUS_TEXT[s.status] || s.status;
+      var info = s.message ? s.message : '';
+      if (s.lastSync) info += ' · 上次同步 ' + new Date(s.lastSync).toLocaleTimeString();
+      $('#acctSyncInfo').textContent = info;
+    }
+    updateSide();
+  }
+
+  function afterCloudChange() {
+    // 云端数据替换了本地对象时才重绘，避免每次同步消息都刷新界面
+    if (Store.data !== lastDataRef) {
+      lastDataRef = Store.data;
+      applySettings();
+      startSession();
+      renderLibrary();
+      renderStats();
+    }
+    if ($('#view-account').classList.contains('active')) renderAccount();
   }
 
   /* ---------------- 词库 ---------------- */
@@ -1290,7 +1634,7 @@ window.SRS = (function () {
       btns[i].disabled = true;
       if (btns[i].getAttribute('data-id') === q.id) btns[i].classList.add('right');
     }
-    if (!ok) { btn.classList.add('wrong'); quiz.wrong.push(q.id); Store.card(q.id).wrong++; Store.save(); } else { quiz.right++; }
+    if (!ok) { btn.classList.add('wrong'); quiz.wrong.push(q.id); Store.card(q.id).wrong++; Store.touch(); } else { quiz.right++; }
 
     $('#quizFeedback').classList.remove('hidden');
     $('#quizFeedback').innerHTML = (ok ? '<b style="color:var(--good)">回答正确</b>' : '<b style="color:var(--bad)">回答错误</b>') +
@@ -1438,14 +1782,48 @@ window.SRS = (function () {
   $('#btnQuizNext').addEventListener('click', function () { quiz.i++; renderQuestion(); });
   $('#btnQuizAgain').addEventListener('click', function () { startQuiz(+$('#quizCount').value); });
 
-  $('#setNew').addEventListener('change', function (e) { Store.data.settings.dailyNew = +e.target.value; Store.save(); });
-  $('#setRev').addEventListener('change', function (e) { Store.data.settings.dailyReview = +e.target.value; Store.save(); });
-  $('#setSpeak').addEventListener('change', function (e) { Store.data.settings.autoSpeak = e.target.checked; Store.save(); });
+  $('#setNew').addEventListener('change', function (e) { Store.data.settings.dailyNew = +e.target.value; Store.touch(); });
+  $('#setRev').addEventListener('change', function (e) { Store.data.settings.dailyReview = +e.target.value; Store.touch(); });
+  $('#setSpeak').addEventListener('change', function (e) { Store.data.settings.autoSpeak = e.target.checked; Store.touch(); });
   $('#themeBtn').addEventListener('click', function () {
     var s = Store.data.settings;
     s.theme = s.theme === 'dark' ? 'light' : 'dark';
-    Store.save();
+    Store.touch();
     applySettings();
+  });
+
+  $('#btnSaveCfg').addEventListener('click', function () {
+    Sync.setConfig($('#sbUrl').value, $('#sbKey').value);
+    Sync.init();
+    toast('配置已保存');
+    renderAccount();
+  });
+  $('#btnClearCfg').addEventListener('click', function () {
+    Sync.setConfig('', '');
+    toast('已清除云端配置，回到本地模式');
+    renderAccount();
+  });
+  $('#btnSignIn').addEventListener('click', function () {
+    var email = $('#acctEmail').value.trim(), pwd = $('#acctPwd').value;
+    if (!email || pwd.length < 6) { toast('请填写邮箱和至少 6 位密码'); return; }
+    Sync.signIn(email, pwd).then(function (ok) {
+      renderAccount();
+      toast(ok ? '登录成功' : (Sync.state().message || '登录失败'));
+    });
+  });
+  $('#btnSignUp').addEventListener('click', function () {
+    var email = $('#acctEmail').value.trim(), pwd = $('#acctPwd').value;
+    if (!email || pwd.length < 6) { toast('请填写邮箱和至少 6 位密码'); return; }
+    Sync.signUp(email, pwd).then(function (ok) {
+      renderAccount();
+      toast(ok ? '注册并登录成功' : (Sync.state().message || '注册失败'));
+    });
+  });
+  $('#btnSignOut').addEventListener('click', function () {
+    Sync.signOut().then(function () { renderAccount(); toast('已退出登录'); });
+  });
+  $('#btnSyncNow').addEventListener('click', function () {
+    Sync.pull().then(function () { renderAccount(); toast(Sync.state().message || '已同步'); });
   });
 
   $('#btnExport').addEventListener('click', function () {
@@ -1489,12 +1867,15 @@ window.SRS = (function () {
   });
 
   /* ---------------- 启动 ---------------- */
+  lastDataRef = Store.data;
+  Sync.onChange(afterCloudChange);
   applySettings();
   renderLibrary();
   renderStats();
   updateSide();
   startSession();
   switchView('learn');
+  Sync.init().then(function () { afterCloudChange(); });
 })();
 
 </script>

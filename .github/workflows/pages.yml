@@ -2,7 +2,7 @@ name: Deploy MYAPP to GitHub Pages
 
 on:
   push:
-    branches: [nanana, main, master]
+    branches: [main, master]   # github-pages 环境只允许默认分支部署，其他分支推送不触发
   workflow_dispatch:
 
 permissions:

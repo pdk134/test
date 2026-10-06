@@ -33,21 +33,25 @@ python build_standalone.py     # 生成 standalone.html（全部 CSS/JS 已内�
 
 一次性配置（只需做一次）：
 
-1. 推送代码到 GitHub（当前仓库 `git@github.com:pdk134/test.git`，分支 `nanana`）
+1. 推送代码到 GitHub（当前仓库 `git@github.com:pdk134/test.git`）
 2. 打开仓库 **Settings → Pages → Build and deployment**，把 Source 改为 **GitHub Actions**
-3. 之后每次 push（或在 Actions 页手动 Run workflow）都会自动部署
+3. 之后每次往默认分支（`main`）push／合并，都会自动部署
 
 访问地址：`https://pdk134.github.io/test/`
 
 手机上打开该地址即可；建议用浏览器「添加到主屏幕」，之后像 App 一样点开就学。
 
-本地提交示例：
+日常更新流程（开发在 `nanana`，发布走 `main`）：
 
 ```bash
+git checkout nanana
 git add MYAPP .github
-git commit -m "feat: 架构术语学习通"
-git push origin nanana
+git commit -m "更新术语库"
+git push origin nanana          # 不会触发部署
+# 在 GitHub 上开 PR 合并到 main，合并后自动部署
 ```
+
+> `github-pages` 环境默认只允许默认分支部署，所以工作流只在 `main` 上触发。
 
 > 部署走的是 Actions，不需要 Jekyll；页面内资源都是相对路径，放在 `https://用户名.github.io/仓库名/` 子路径下也能正常工作。
 
@@ -64,6 +68,8 @@ MYAPP/
 │       ├── terms.js        术语库（要加知识点就改这里）
 │       ├── store.js        localStorage 存储层
 │       ├── srs.js          间隔重复调度算法
+│       ├── config.js       Supabase 默认值（可留空）
+│       └── sync.js         云端账号与进度同步
 │       └── app.js          页面交互逻辑
 └── README.md
 ```
@@ -105,6 +111,45 @@ MYAPP/
   r: ['重试', '消息队列']     // 相关术语（填中文术语名，可跳转）
 }
 ```
+
+## 云端账号同步（可选）
+
+手机和电脑登录同一账号即可同步进度。用的是 Supabase（免费额度足够个人使用），密钥直接填在站点「账号」页面，不必改代码重新部署。
+
+**1. 建 Supabase 项目**：supabase.com 新建（Free 计划即可）。
+
+**2. SQL Editor 里执行建表语句**（含 RLS，保证每人只能读写自己的数据）：
+
+```sql
+create table if not exists public.progress (
+  user_id uuid primary key references auth.users on delete cascade,
+  data jsonb not null,
+  updated_at bigint not null
+);
+
+alter table public.progress enable row level security;
+
+create policy "own_progress" on public.progress
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+```
+
+**3. 取密钥**：Settings → API，复制 **Project URL** 和 **anon public key**。
+
+**4. 关掉邮箱验证（推荐）**：Authentication → Sign In / Providers → Email，关闭 *Confirm email*，否则注册后要先点邮件链接。
+
+**5. 站点配置**：打开「账号」页 → 填入 URL 与 anon key → 保存 → 用邮箱 + 密码注册/登录。
+
+**6. 另一台设备**：浏览器打开同一站点，填同样的配置（或什么都不填也行，配置只存在本机），登录同一账号即可。
+
+同步规则：
+- 本机有改动 → 2.5 秒后自动上传
+- 切回页面 / 每 2 分钟 → 自动拉取云端最新数据
+- 两端冲突时以 `updatedAt` 时间戳最新的一份为准（last-write-wins）
+- 未配置或未登录时完全等同之前的纯本地模式
+
+> anon key 是设计为可公开的前端密钥，安全性由上面的 RLS 策略保证；请不要把 service_role key 填进去。
 
 ## 数据说明
 

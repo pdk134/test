@@ -19,7 +19,8 @@
     library: ['术语词库', '浏览、检索全部术语，支持按分类与状态筛选'],
     quiz: ['选择题测试', '术语 ↔ 释义 双向考察，答错自动进入难词本'],
     stats: ['学习统计', '掌握进度、每日学习量与难词本'],
-    settings: ['设置', '学习计划、数据备份与快捷键']
+    settings: ['设置', '学习计划、数据备份与快捷键'],
+    account: ['账号与同步', '登录后可在手机与电脑之间同步学习进度']
   };
 
   function switchView(name) {
@@ -32,6 +33,7 @@
     if (name === 'learn') { if (!session.items.length) startSession(); else renderCard(); }
     if (name === 'library') renderLibrary();
     if (name === 'stats') renderStats();
+    if (name === 'account') renderAccount();
     window.scrollTo(0, 0);
   }
 
@@ -191,6 +193,41 @@
     $('#sideNew').textContent = d.n;
     $('#sideRev').textContent = d.r;
     $('#sideStreak').textContent = d.streak;
+    var s = Sync.state();
+    $('#sideUser').textContent = s.email ? '· ' + s.email.split('@')[0] : '· 本地模式';
+  }
+
+  /* ---------------- 账号与同步 ---------------- */
+  var STATUS_TEXT = { off: '未同步', ready: '已连接', syncing: '同步中', error: '异常' };
+  var lastDataRef = null;
+
+  function renderAccount() {
+    var s = Sync.state(), cfg = Sync.config();
+    $('#sbUrl').value = cfg ? cfg.url : '';
+    $('#sbKey').value = cfg ? cfg.key : '';
+    var logged = !!s.email;
+    $('#acctAuth').classList.toggle('hidden', logged);
+    $('#acctUser').classList.toggle('hidden', !logged);
+    if (logged) {
+      $('#acctEmailShow').textContent = s.email;
+      $('#acctStatus').textContent = STATUS_TEXT[s.status] || s.status;
+      var info = s.message ? s.message : '';
+      if (s.lastSync) info += ' · 上次同步 ' + new Date(s.lastSync).toLocaleTimeString();
+      $('#acctSyncInfo').textContent = info;
+    }
+    updateSide();
+  }
+
+  function afterCloudChange() {
+    // 云端数据替换了本地对象时才重绘，避免每次同步消息都刷新界面
+    if (Store.data !== lastDataRef) {
+      lastDataRef = Store.data;
+      applySettings();
+      startSession();
+      renderLibrary();
+      renderStats();
+    }
+    if ($('#view-account').classList.contains('active')) renderAccount();
   }
 
   /* ---------------- 词库 ---------------- */
@@ -307,7 +344,7 @@
       btns[i].disabled = true;
       if (btns[i].getAttribute('data-id') === q.id) btns[i].classList.add('right');
     }
-    if (!ok) { btn.classList.add('wrong'); quiz.wrong.push(q.id); Store.card(q.id).wrong++; Store.save(); } else { quiz.right++; }
+    if (!ok) { btn.classList.add('wrong'); quiz.wrong.push(q.id); Store.card(q.id).wrong++; Store.touch(); } else { quiz.right++; }
 
     $('#quizFeedback').classList.remove('hidden');
     $('#quizFeedback').innerHTML = (ok ? '<b style="color:var(--good)">回答正确</b>' : '<b style="color:var(--bad)">回答错误</b>') +
@@ -455,14 +492,48 @@
   $('#btnQuizNext').addEventListener('click', function () { quiz.i++; renderQuestion(); });
   $('#btnQuizAgain').addEventListener('click', function () { startQuiz(+$('#quizCount').value); });
 
-  $('#setNew').addEventListener('change', function (e) { Store.data.settings.dailyNew = +e.target.value; Store.save(); });
-  $('#setRev').addEventListener('change', function (e) { Store.data.settings.dailyReview = +e.target.value; Store.save(); });
-  $('#setSpeak').addEventListener('change', function (e) { Store.data.settings.autoSpeak = e.target.checked; Store.save(); });
+  $('#setNew').addEventListener('change', function (e) { Store.data.settings.dailyNew = +e.target.value; Store.touch(); });
+  $('#setRev').addEventListener('change', function (e) { Store.data.settings.dailyReview = +e.target.value; Store.touch(); });
+  $('#setSpeak').addEventListener('change', function (e) { Store.data.settings.autoSpeak = e.target.checked; Store.touch(); });
   $('#themeBtn').addEventListener('click', function () {
     var s = Store.data.settings;
     s.theme = s.theme === 'dark' ? 'light' : 'dark';
-    Store.save();
+    Store.touch();
     applySettings();
+  });
+
+  $('#btnSaveCfg').addEventListener('click', function () {
+    Sync.setConfig($('#sbUrl').value, $('#sbKey').value);
+    Sync.init();
+    toast('配置已保存');
+    renderAccount();
+  });
+  $('#btnClearCfg').addEventListener('click', function () {
+    Sync.setConfig('', '');
+    toast('已清除云端配置，回到本地模式');
+    renderAccount();
+  });
+  $('#btnSignIn').addEventListener('click', function () {
+    var email = $('#acctEmail').value.trim(), pwd = $('#acctPwd').value;
+    if (!email || pwd.length < 6) { toast('请填写邮箱和至少 6 位密码'); return; }
+    Sync.signIn(email, pwd).then(function (ok) {
+      renderAccount();
+      toast(ok ? '登录成功' : (Sync.state().message || '登录失败'));
+    });
+  });
+  $('#btnSignUp').addEventListener('click', function () {
+    var email = $('#acctEmail').value.trim(), pwd = $('#acctPwd').value;
+    if (!email || pwd.length < 6) { toast('请填写邮箱和至少 6 位密码'); return; }
+    Sync.signUp(email, pwd).then(function (ok) {
+      renderAccount();
+      toast(ok ? '注册并登录成功' : (Sync.state().message || '注册失败'));
+    });
+  });
+  $('#btnSignOut').addEventListener('click', function () {
+    Sync.signOut().then(function () { renderAccount(); toast('已退出登录'); });
+  });
+  $('#btnSyncNow').addEventListener('click', function () {
+    Sync.pull().then(function () { renderAccount(); toast(Sync.state().message || '已同步'); });
   });
 
   $('#btnExport').addEventListener('click', function () {
@@ -506,10 +577,13 @@
   });
 
   /* ---------------- 启动 ---------------- */
+  lastDataRef = Store.data;
+  Sync.onChange(afterCloudChange);
   applySettings();
   renderLibrary();
   renderStats();
   updateSide();
   startSession();
   switchView('learn');
+  Sync.init().then(function () { afterCloudChange(); });
 })();
