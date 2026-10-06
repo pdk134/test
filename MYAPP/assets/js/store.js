@@ -18,7 +18,7 @@ window.Store = (function () {
       updatedAt: 0,
       cards: {},
       stats: { reviewed: 0, correct: 0, streak: 0, lastDay: '', daily: {} },
-      settings: { dailyNew: 10, dailyReview: 60, autoSpeak: false, theme: 'dark', bgm: false, bgmVol: 35 }
+      settings: { dailyNew: 10, dailyReview: 60, autoSpeak: false, theme: 'dark', bgm: false, bgmVol: 35, sfx: true, sfxVol: 60 }
     };
   }
 
