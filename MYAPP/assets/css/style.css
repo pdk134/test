@@ -104,6 +104,8 @@ kbd {
 .adv-config summary::before { content: '▸ '; color: var(--text-dim); }
 .adv-config[open] summary { margin-bottom: 12px; }
 .adv-config[open] summary::before { content: '▾ '; }
+.fc-ja { font-size: 14px; color: var(--text-dim); letter-spacing: .02em; margin-top: 6px; }
+.fc-back .fc-ja { margin-top: 2px; }
 .muted { color: var(--text-dim); font-size: 13px; }
 
 /* 进度条 */

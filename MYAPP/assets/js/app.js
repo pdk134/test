@@ -126,8 +126,10 @@
     $('#fLv').textContent = levelText(t.lv);
     $('#fTerm').textContent = t.t;
     $('#fEn').textContent = t.en || '';
+    $('#fJa').textContent = t.ja || '';
 
     $('#bTerm').textContent = t.t + (t.en ? '　' + t.en : '');
+    $('#bJa').textContent = t.ja || '';
     $('#bDef').textContent = t.d || '';
     $('#bPoints').innerHTML = (t.p || []).map(function (p) { return '<li>' + p + '</li>'; }).join('');
     $('#bEg').textContent = t.e || '—';
@@ -245,7 +247,7 @@
       if (libState.cat !== 'all' && t.c !== libState.cat) return false;
       if (libState.status !== 'all' && SRS.statusOf(Store.raw(t.id)) !== libState.status) return false;
       if (!q) return true;
-      var hay = (t.t + ' ' + (t.en || '') + ' ' + (t.d || '')).toLowerCase();
+      var hay = (t.t + ' ' + (t.en || '') + ' ' + (t.ja || '') + ' ' + (t.d || '')).toLowerCase();
       return hay.indexOf(q) >= 0;
     });
 
@@ -253,7 +255,7 @@
       var st = statusLabel(t.id);
       return '<div class="lib-item" data-open="' + t.id + '">' +
         '<div class="lib-top"><div><div class="lib-term">' + t.t + '</div>' +
-        '<div class="lib-en">' + (t.en || '') + '</div></div>' +
+        '<div class="lib-en">' + (t.en || '') + (t.ja ? '　·　' + t.ja : '') + '</div></div>' +
         '<span class="badge ' + st.cls + '">' + st.text + '</span></div>' +
         '<div class="lib-def">' + (t.d || '') + '</div></div>';
     }).join('') || '<p class="muted">没有匹配的术语</p>';
@@ -266,7 +268,7 @@
     var st = statusLabel(id);
     $('#modalBody').innerHTML =
       '<h3>' + t.t + '</h3>' +
-      '<p class="sub">' + (t.en || '') + '　·　' + t.c + '　·　' + levelText(t.lv) + '</p>' +
+      '<p class="sub">' + (t.en || '') + '　·　' + (t.ja || '') + '　·　' + t.c + '　·　' + levelText(t.lv) + '</p>' +
       '<div class="sec"><h4>定义</h4><p class="muted" style="font-size:14px;line-height:1.8">' + (t.d || '') + '</p></div>' +
       '<div class="sec"><h4>要点</h4><ul class="fc-points" style="color:var(--text)">' +
       (t.p || []).map(function (p) { return '<li>' + p + '</li>'; }).join('') + '</ul></div>' +
@@ -327,7 +329,7 @@
     $('#quizBar').style.width = Math.round(quiz.i / quiz.list.length * 100) + '%';
     $('#quizCounter').textContent = quiz.i + ' / ' + quiz.list.length;
     $('#quizQ').textContent = q.type === 0 ? t.t : (t.d || '');
-    $('#quizTip').textContent = q.type === 0 ? '选出正确的释义' : '选出对应的术语';
+    $('#quizTip').textContent = (t.ja ? t.ja + '　·　' : '') + (q.type === 0 ? '选出正确的释义' : '选出对应的术语');
     $('#quizFeedback').classList.add('hidden');
     $('#btnQuizNext').classList.add('hidden');
 
@@ -348,7 +350,7 @@
 
     $('#quizFeedback').classList.remove('hidden');
     $('#quizFeedback').innerHTML = (ok ? '<b style="color:var(--good)">回答正确</b>' : '<b style="color:var(--bad)">回答错误</b>') +
-      '<br>' + t.t + '：' + (t.d || '');
+      '<br>' + t.t + (t.ja ? '　' + t.ja : '') + '：' + (t.d || '');
     $('#btnQuizNext').classList.remove('hidden');
   }
 
@@ -426,14 +428,39 @@
     }).join('') : '<p class="muted">还没有难词，保持住</p>';
   }
 
-  /* ---------------- 设置 ---------------- */
+  /* ---------------- 设置 / BGM ---------------- */
+  function updateBgmBtn() {
+    var b = $('#btnBgm');
+    if (!b) return;
+    var on = !!(window.Bgm && Bgm.isOn());
+    b.textContent = on ? '♪ BGM 开' : '♪ BGM';
+    b.classList.toggle('primary', on);
+    b.classList.toggle('ghost', !on);
+  }
+
+  function setBgm(on, tip) {
+    var s = Store.data.settings;
+    s.bgm = !!on;
+    Store.touch();
+    if (window.Bgm) {
+      if (s.bgm) { Bgm.setVolume((s.bgmVol || 35) / 100); Bgm.start(); }
+      else Bgm.stop();
+    }
+    updateBgmBtn();
+    if (tip) toast(s.bgm ? 'BGM 已开启' : 'BGM 已关闭');
+  }
+
   function applySettings() {
     var s = Store.data.settings;
     $('#setNew').value = s.dailyNew;
     $('#setRev').value = s.dailyReview;
     $('#setSpeak').checked = !!s.autoSpeak;
+    $('#setBgm').checked = !!s.bgm;
+    $('#setBgmVol').value = s.bgmVol || 35;
+    if (window.Bgm) Bgm.setVolume((s.bgmVol || 35) / 100);
     document.documentElement.setAttribute('data-theme', s.theme);
     $('#themeBtn').textContent = s.theme === 'dark' ? '☾' : '☀';
+    updateBgmBtn();
   }
 
   /* ---------------- 事件绑定 ---------------- */
@@ -495,6 +522,13 @@
   $('#setNew').addEventListener('change', function (e) { Store.data.settings.dailyNew = +e.target.value; Store.touch(); });
   $('#setRev').addEventListener('change', function (e) { Store.data.settings.dailyReview = +e.target.value; Store.touch(); });
   $('#setSpeak').addEventListener('change', function (e) { Store.data.settings.autoSpeak = e.target.checked; Store.touch(); });
+  $('#setBgm').addEventListener('change', function (e) { setBgm(e.target.checked, true); });
+  $('#setBgmVol').addEventListener('input', function (e) {
+    Store.data.settings.bgmVol = +e.target.value;
+    if (window.Bgm) Bgm.setVolume(+e.target.value / 100);
+  });
+  $('#setBgmVol').addEventListener('change', function () { Store.touch(); });
+  $('#btnBgm').addEventListener('click', function () { setBgm(!Store.data.settings.bgm, true); });
   $('#themeBtn').addEventListener('click', function () {
     var s = Store.data.settings;
     s.theme = s.theme === 'dark' ? 'light' : 'dark';
@@ -575,12 +609,14 @@
     else if (e.key === '1') rate(0);
     else if (e.key === '2') rate(1);
     else if (e.key === '3') rate(2);
+    else if (e.key === 'b' || e.key === 'B') setBgm(!Store.data.settings.bgm, true);
   });
 
   /* ---------------- 启动 ---------------- */
   lastDataRef = Store.data;
   Sync.onChange(afterCloudChange);
   applySettings();
+  if (Store.data.settings.bgm && window.Bgm) Bgm.startWhenAllowed(); // 等首次点击/按键后才真正出声
   renderLibrary();
   renderStats();
   updateSide();
