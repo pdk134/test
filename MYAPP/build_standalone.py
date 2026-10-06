@@ -25,7 +25,10 @@ html = html.replace(
 
 
 def inline_script(m):
-    return '<script>\n' + read(m.group(1)) + '\n</script>'
+    src = m.group(1)
+    if src.startswith(('http://', 'https://', '//')):
+        return m.group(0)   # CDN 资源保持外链
+    return '<script>\n' + read(src) + '\n</script>'
 
 
 html = re.sub(r'<script src="([^"]+)"></script>', inline_script, html)

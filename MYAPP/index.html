@@ -24,10 +24,11 @@
       <button class="nav-item" data-view="quiz"><span class="ic">✓</span>测试</button>
       <button class="nav-item" data-view="stats"><span class="ic">▲</span>统计</button>
       <button class="nav-item" data-view="settings"><span class="ic">⚙</span>设置</button>
+      <button class="nav-item" data-view="account"><span class="ic">☺</span>账号</button>
     </nav>
 
     <div class="side-card">
-      <div class="side-title">今日进度</div>
+      <div class="side-title">今日进度<span id="sideUser" class="side-user"></span></div>
       <div class="side-row"><span>新学</span><b id="sideNew">0</b></div>
       <div class="side-row"><span>复习</span><b id="sideRev">0</b></div>
       <div class="side-row"><span>连续天数</span><b id="sideStreak">0</b></div>
@@ -249,6 +250,55 @@
         </ul>
       </div>
     </section>
+    <!-- 账号 -->
+    <section class="view" id="view-account">
+      <div class="panel">
+        <h3>云端服务配置</h3>
+        <p class="muted">填入 Supabase 项目的 URL 与 anon public key 后即可跨设备同步。配置只存在本机浏览器，不会写进代码仓库。</p>
+        <div class="form-row">
+          <label>Project URL</label>
+          <input type="text" id="sbUrl" placeholder="https://xxxx.supabase.co" class="wide">
+        </div>
+        <div class="form-row">
+          <label>anon key</label>
+          <input type="password" id="sbKey" placeholder="eyJhbGciOi..." class="wide">
+        </div>
+        <div class="sum-actions" style="justify-content:flex-start">
+          <button class="btn primary" id="btnSaveCfg">保存配置</button>
+          <button class="btn ghost" id="btnClearCfg">清除配置</button>
+        </div>
+        <p class="muted" style="margin-top:10px">还没有 Supabase 项目？到 supabase.com 免费新建 → Settings → API 里复制这两个值，并在 SQL Editor 执行 README 中的建表语句。</p>
+      </div>
+
+      <div class="panel" id="acctAuth">
+        <h3>登录 / 注册</h3>
+        <div class="form-row">
+          <label>邮箱</label>
+          <input type="email" id="acctEmail" placeholder="you@example.com" class="wide">
+        </div>
+        <div class="form-row">
+          <label>密码</label>
+          <input type="password" id="acctPwd" placeholder="至少 6 位" class="wide">
+        </div>
+        <div class="sum-actions" style="justify-content:flex-start">
+          <button class="btn primary" id="btnSignIn">登录</button>
+          <button class="btn ghost" id="btnSignUp">注册</button>
+        </div>
+      </div>
+
+      <div class="panel hidden" id="acctUser">
+        <h3>已登录</h3>
+        <div class="acct-box">
+          <div><b id="acctEmailShow"></b><span class="muted" id="acctSyncInfo"></span></div>
+          <span class="badge" id="acctStatus"></span>
+        </div>
+        <div class="sum-actions" style="justify-content:flex-start">
+          <button class="btn primary" id="btnSyncNow">立即同步</button>
+          <button class="btn ghost" id="btnSignOut">退出登录</button>
+        </div>
+        <p class="muted" style="margin-top:10px">两端都在线时会自动同步：本机改动 2.5 秒后上传，切回页面时拉取云端最新数据。</p>
+      </div>
+    </section>
   </main>
 </div>
 
@@ -261,9 +311,12 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="assets/js/terms.js"></script>
 <script src="assets/js/store.js"></script>
 <script src="assets/js/srs.js"></script>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/sync.js"></script>
 <script src="assets/js/app.js"></script>
 </body>
 </html>
