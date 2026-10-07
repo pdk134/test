@@ -1,0 +1,11 @@
+Serving HTTP on :: port 8000 (http://[::]:8000/) ...
+::1 - - [06/Oct/2026 17:18:56] "GET / HTTP/1.1" 200 -
+::1 - - [06/Oct/2026 17:19:05] "GET / HTTP/1.1" 200 -
+::1 - - [06/Oct/2026 17:19:05] "GET /assets/css/style.css HTTP/1.1" 200 -
+::1 - - [06/Oct/2026 17:19:05] "GET /assets/js/terms.js HTTP/1.1" 200 -
+::1 - - [06/Oct/2026 17:19:05] "GET /assets/js/store.js HTTP/1.1" 200 -
+::1 - - [06/Oct/2026 17:19:06] "GET /assets/js/srs.js HTTP/1.1" 200 -
+::1 - - [06/Oct/2026 17:19:06] "GET /assets/js/config.js HTTP/1.1" 200 -
+::1 - - [06/Oct/2026 17:19:06] "GET /assets/js/sync.js HTTP/1.1" 200 -
+::1 - - [06/Oct/2026 17:19:06] "GET /assets/js/bgm.js HTTP/1.1" 200 -
+::1 - - [06/Oct/2026 17:19:06] "GET /assets/js/app.js HTTP/1.1" 200 -
