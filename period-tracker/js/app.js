@@ -6,10 +6,12 @@
 'use strict';
 
 /* ---------- 常量 ---------- */
-const STORAGE_KEY = 'periodTracker.v1';
+const STORAGE_KEY = 'periodTracker.v2';
 const DEFAULT_CYCLE = 28;   // 数据不足时的默认周期长度
-const DEFAULT_PERIOD = 5;   // 数据不足时的默认经期长度
+const DEFAULT_PERIOD = 7;   // 数据不足时的默认经期长度（首次使用默认 7 天，之后按真实记录自动学习）
 const LUTEAL_PHASE = 14;    // 黄体期（排卵到下次经期）固定约 14 天
+const PERIOD_LEN_MIN = 2;   // 经期长度合理下限（避免异常值拉偏预测）
+const PERIOD_LEN_MAX = 10;  // 经期长度合理上限
 
 const SYMPTOMS = [
   { id: 'cramps',   label: '😖 腹痛' },
@@ -70,7 +72,8 @@ const state = {
 
 function loadState() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    // 兼容旧版本（v1）的数据，避免升级后现有记录丢失
+    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('periodTracker.v1');
     if (!raw) return;
     const data = JSON.parse(raw);
     state.periodDays = new Set(data.periodDays || []);
@@ -105,6 +108,49 @@ function getPeriods() {
   return periods;
 }
 
+/**
+ * 计算"延续经期"：对每个只标记了开始日（或未标满）的经期段，
+ * 自动向后延伸 avgPeriodLen 天，供日历用虚线预测色展示。
+ *
+ * 一旦用户把某天点成实心经期，该天即进入 periodDays，
+ * 该段 end 随之变长，不再是"待确认"状态。
+ */
+function getOngoingPeriods(periods, avgPeriodLen) {
+  const result = [];
+
+  for (const p of periods) {
+    const start = parseDate(p.start);
+    const end = parseDate(p.end);
+    const markedLen = diffDays(start, end) + 1;
+
+    // 已经是完整长度的经期段，不需要延续
+    if (markedLen >= avgPeriodLen) continue;
+
+    // 完整延续到预测结束日（让用户一眼看到整个经期范围）
+    const realEnd = addDays(start, avgPeriodLen - 1);
+
+    if (realEnd <= end) continue;
+
+    result.push({
+      start: p.start,
+      markedEnd: p.end,                 // 已确认的结束日
+      predictedEnd: fmt(realEnd),       // 延续到的预测结束日
+      startDate: start,
+      endDate: realEnd,
+      pendingDays: diffDays(end, realEnd)  // 待确认的天数
+    });
+  }
+  return result;
+}
+
+// 某天是否落在"延续预测"区间内
+function findOngoing(d, ongoing) {
+  for (const o of ongoing) {
+    if (d >= o.startDate && d <= o.endDate) return o;
+  }
+  return null;
+}
+
 // 平均周期长度（相邻经期开始日的间隔，最多取最近 6 个间隔）
 function getAvgCycle(periods) {
   if (periods.length < 2) return DEFAULT_CYCLE;
@@ -117,12 +163,29 @@ function getAvgCycle(periods) {
   return Math.round(sum / recent.length);
 }
 
-// 平均经期长度
+/**
+ * 平均经期长度
+ *
+ * 关键点：只标了 1 天的经期段往往是"刚开了个头、还没标完"，
+ * 若把它当真实长度参与平均，会把预测越算越短（1 天 -> 延续立刻结束）。
+ * 因此这里只采纳【标记天数 ≥ PERIOD_LEN_CONFIRMED 天】的经期段来学习，
+ * 未达标的段一律忽略，从而保持稳定的默认长度。
+ */
+const PERIOD_LEN_CONFIRMED = 3;  // 标记达到 3 天才认为是"可靠样本"
+
 function getAvgPeriodLen(periods) {
   if (periods.length === 0) return DEFAULT_PERIOD;
-  const lens = periods.slice(-6).map(p => diffDays(parseDate(p.start), parseDate(p.end)) + 1);
-  const sum = lens.reduce((a, b) => a + b, 0);
-  return Math.max(1, Math.round(sum / lens.length));
+
+  const lens = periods
+    .map(p => diffDays(parseDate(p.start), parseDate(p.end)) + 1)
+    .filter(len => len >= PERIOD_LEN_CONFIRMED && len <= PERIOD_LEN_MAX);
+
+  // 还没有可靠样本时，保持默认长度，不用"只标了 1 天"的段去拉低预测
+  if (lens.length === 0) return DEFAULT_PERIOD;
+
+  const recent = lens.slice(-6);
+  const sum = recent.reduce((a, b) => a + b, 0);
+  return Math.max(PERIOD_LEN_MIN, Math.min(PERIOD_LEN_MAX, Math.round(sum / recent.length)));
 }
 
 // 预测：下次经期、排卵日、易孕期
@@ -180,8 +243,10 @@ function renderStatus() {
   const pred = getPrediction(periods);
   const last = periods[periods.length - 1];
 
-  // 今天是否在经期内
+  // 今天是否在经期内（已确认），或处于延续预测区间内
   const inPeriod = periods.some(p => isInRange(t, parseDate(p.start), parseDate(p.end)));
+  const ongoingList = getOngoingPeriods(periods, getAvgPeriodLen(periods));
+  const ongoingToday = findOngoing(t, ongoingList);
 
   let mainHtml, subHtml, tagHtml;
 
@@ -190,6 +255,14 @@ function renderStatus() {
     mainHtml = '经期第 <span class="big-num">' + dayNum + '</span> 天';
     subHtml = '本次经期从 ' + fmtShort(parseDate(last.start)) + ' 开始，注意保暖休息哦 🫖';
     tagHtml = '<span class="phase-tag">经期中</span>';
+  } else if (ongoingToday) {
+    // 处于延续预测区间：还没点确认，但按规律仍在经期内
+    const dayNum = diffDays(ongoingToday.startDate, t) + 1;
+    mainHtml = '经期第 <span class="big-num">' + dayNum + '</span> 天';
+    subHtml = '本次经期从 ' + fmtShort(ongoingToday.startDate) + ' 开始，' +
+      '已按平均经期长度预测至 ' + fmtShort(ongoingToday.endDate) +
+      '，到记录页点击确认即可';
+    tagHtml = '<span class="phase-tag">经期中（预测）</span>';
   } else {
     const cycleDay = diffDays(parseDate(last.start), t) + 1;
     const untilNext = diffDays(t, pred.nextStart);
@@ -230,6 +303,9 @@ function renderCalendar() {
   const pred = getPrediction(periods);
   const tStr = fmt(today());
 
+  // 当前经期的"延续预测"区间（只标了开始日时，向后自动延伸）
+  const ongoing = getOngoingPeriods(periods, pred ? pred.avgPeriodLen : DEFAULT_PERIOD);
+
   // 周一为一周的开始
   const first = new Date(y, m, 1);
   let startOffset = first.getDay() - 1;
@@ -247,7 +323,11 @@ function renderCalendar() {
     if (s === state.selectedDate) classes.push('selected');
 
     if (state.periodDays.has(s)) {
+      // 已确认的经期日（实心）
       classes.push('is-period');
+    } else if (findOngoing(d, ongoing)) {
+      // 本次经期的延续预测日（虚线待确认）
+      classes.push('is-ongoing');
     } else if (pred) {
       if (s === fmt(pred.ovulation)) {
         classes.push('is-ovulation');
@@ -296,8 +376,24 @@ function renderLog() {
 
   // 经期开关
   const isPeriod = state.periodDays.has(state.selectedDate);
+  const periods = getPeriods();
+  const pred = getPrediction(periods);
+  const ongoing = getOngoingPeriods(periods, pred ? pred.avgPeriodLen : DEFAULT_PERIOD);
+  const inOngoing = !isPeriod && findOngoing(d, ongoing);
+
   els.periodToggle.classList.toggle('on', isPeriod);
-  els.periodToggle.textContent = isPeriod ? '🩸 这一天是经期（点击取消）' : '🩸 标记这一天为经期';
+  if (isPeriod) {
+    els.periodToggle.textContent = '🩸 已确认：这一天是经期（点击取消）';
+  } else if (inOngoing) {
+    els.periodToggle.textContent = '🩸 这一天在经期内，点击确认为经期';
+  } else {
+    els.periodToggle.textContent = '🩸 标记这一天为经期';
+  }
+
+  // 延续提示
+  if (!isPeriod && inOngoing) {
+    els.logDateSub.textContent += ' · 预计经期内，待确认';
+  }
 
   // 症状
   const log = state.dailyLogs[state.selectedDate] || { symptoms: [], mood: '', note: '' };
@@ -389,18 +485,31 @@ function renderStats() {
   if (periods.length === 0) {
     els.historyList.innerHTML = '<div class="history-empty">还没有记录</div>';
   } else {
+    const ongoingList = getOngoingPeriods(periods, avgPeriodLen);
     els.historyList.innerHTML = periods.slice().reverse().map((p, idx) => {
-      const len = diffDays(parseDate(p.start), parseDate(p.end)) + 1;
+      const markedLen = diffDays(parseDate(p.start), parseDate(p.end)) + 1;
       const list = periods;
       const realIdx = list.length - 1 - idx;
+
+      // 若该段还在延续预测中，标注它
+      const ong = ongoingList.find(o => o.start === p.start);
+      let lenText, endText;
+      if (ong) {
+        endText = fmtShort(ong.endDate) + '?';
+        lenText = '已标 ' + markedLen + ' 天 · 预计 ' + (diffDays(ong.startDate, ong.endDate) + 1) + ' 天';
+      } else {
+        endText = fmtShort(parseDate(p.end));
+        lenText = '持续 ' + markedLen + ' 天';
+      }
+
       let cycleText = '';
       if (realIdx > 0) {
         const cyc = diffDays(parseDate(list[realIdx - 1].start), parseDate(p.start));
         cycleText = ' · 距上次 ' + cyc + ' 天';
       }
       return '<div class="history-item">' +
-        '<span class="history-dates">' + fmtShort(parseDate(p.start)) + ' ~ ' + fmtShort(parseDate(p.end)) + '</span>' +
-        '<span class="history-meta">持续 ' + len + ' 天' + cycleText + '</span>' +
+        '<span class="history-dates">' + fmtShort(parseDate(p.start)) + ' ~ ' + endText + '</span>' +
+        '<span class="history-meta">' + lenText + cycleText + '</span>' +
         '</div>';
     }).join('');
   }
