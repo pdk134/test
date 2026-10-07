@@ -156,6 +156,18 @@ body {
   color: #fff;
   font-weight: 600;
 }
+/* 用户明确标记的经期结束日：右上角打勾 */
+.day-cell.is-period-end::before {
+  content: '✓';
+  position: absolute;
+  top: 1px;
+  right: 4px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #fff;
+  opacity: 0.95;
+}
+
 /* 本次经期的延续预测日：浅粉底 + 虚线框，点击可确认为实心经期 */
 .day-cell.is-ongoing {
   background: #ffe4ec;
@@ -193,6 +205,16 @@ body {
 .calendar-legend span { display: inline-flex; align-items: center; gap: 4px; }
 .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 .dot-period { background: var(--primary); }
+.dot-end { background: var(--primary); position: relative; }
+.dot-end::after {
+  content: '✓';
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  font-size: 0.6rem;
+  color: var(--primary-dark);
+  font-weight: 700;
+}
 .dot-ongoing { background: #ffe4ec; border: 1.5px dashed var(--primary); }
 .dot-predicted { background: var(--primary-light); border: 1.5px dashed var(--primary); }
 .dot-ovulation { background: var(--purple); }
@@ -241,6 +263,31 @@ body {
   background: var(--primary);
   border-style: solid;
   color: #fff;
+}
+
+.period-end-toggle {
+  width: 100%;
+  padding: 12px;
+  border-radius: 14px;
+  border: 2px dashed #4caf7d;
+  background: #f0faf4;
+  color: #3d8f63;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 6px;
+}
+.period-end-toggle.on {
+  background: #4caf7d;
+  border-style: solid;
+  color: #fff;
+}
+.period-end-toggle:disabled {
+  background: #f4f1f2;
+  border-color: #e0d5da;
+  color: #b3a4ab;
+  cursor: not-allowed;
 }
 
 .section-title {

@@ -32,6 +32,7 @@
         <div class="calendar-grid" id="calendarGrid"></div>
         <div class="calendar-legend">
           <span><i class="dot dot-period"></i>经期</span>
+          <span><i class="dot dot-end"></i>经期结束日</span>
           <span><i class="dot dot-ongoing"></i>经期中(预测)</span>
           <span><i class="dot dot-predicted"></i>下次经期</span>
           <span><i class="dot dot-ovulation"></i>排卵日</span>
@@ -39,7 +40,9 @@
           <span><i class="dot dot-log"></i>有记录</span>
         </div>
       </div>
-      <p class="hint">💡 标记经期开始日后，会按平均经期长度自动向后延展出虚线预测；点击虚线日期即可确认为经期</p>
+      <p class="hint">💡 标记经期开始日后，会按平均经期长度向后延展出虚线预测；<br>
+        经期真正结束时，在记录页点「经期在这一天结束」，之后的多余预测会消失，<br>
+        并把这次的真实天数记入平均经期长度，用于下一次预测。</p>
     </section>
 
     <!-- ========== 记录页 ========== -->
@@ -55,6 +58,7 @@
         </div>
 
         <button class="period-toggle" id="periodToggle"></button>
+        <button class="period-end-toggle" id="periodEndToggle"></button>
 
         <h3 class="section-title">😣 症状</h3>
         <div class="chip-grid" id="symptomChips"></div>
