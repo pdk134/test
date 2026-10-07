@@ -156,6 +156,13 @@ body {
   color: #fff;
   font-weight: 600;
 }
+/* 本次经期的延续预测日：浅粉底 + 虚线框，点击可确认为实心经期 */
+.day-cell.is-ongoing {
+  background: #ffe4ec;
+  color: var(--primary-dark);
+  border: 1.5px dashed var(--primary);
+  font-weight: 500;
+}
 .day-cell.is-predicted {
   background: var(--primary-light);
   color: var(--primary-dark);
@@ -186,6 +193,7 @@ body {
 .calendar-legend span { display: inline-flex; align-items: center; gap: 4px; }
 .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 .dot-period { background: var(--primary); }
+.dot-ongoing { background: #ffe4ec; border: 1.5px dashed var(--primary); }
 .dot-predicted { background: var(--primary-light); border: 1.5px dashed var(--primary); }
 .dot-ovulation { background: var(--purple); }
 .dot-fertile { background: var(--purple-light); }
