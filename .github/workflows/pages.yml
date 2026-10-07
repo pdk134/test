@@ -1,4 +1,4 @@
-name: Deploy MYAPP to GitHub Pages
+name: Deploy site to GitHub Pages
 
 on:
   push:
@@ -20,18 +20,28 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          sparse-checkout: MYAPP
+
+      # 组装待发布的站点：根路径放 MYAPP，/period-tracker/ 放经期小助手
+      - name: Assemble site
+        run: |
+          mkdir -p site
+          if [ -d MYAPP ]; then cp -r MYAPP/. site/; fi
+          if [ -d period-tracker ]; then
+            mkdir -p site/period-tracker
+            cp -r period-tracker/. site/period-tracker/
+          fi
+          echo "已组装待发布内容："
+          find site -maxdepth 2 -type f | sort
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
         with:
-          enablement: true   # 自动开启 Pages，无需手动到 Settings 里设置
+          enablement: true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: MYAPP
+          path: site
 
   deploy:
     needs: build
