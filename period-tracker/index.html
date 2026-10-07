@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>经期小助手</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="app-header">
+    <h1>🌸 经期小助手</h1>
+  </header>
+
+  <main class="app-main">
+
+    <!-- ========== 日历页 ========== -->
+    <section id="page-calendar" class="page active">
+      <div class="status-card" id="statusCard"></div>
+
+      <div class="calendar-card">
+        <div class="calendar-header">
+          <button class="nav-btn" id="prevMonth" aria-label="上个月">‹</button>
+          <span class="month-label" id="monthLabel"></span>
+          <button class="nav-btn" id="nextMonth" aria-label="下个月">›</button>
+        </div>
+        <div class="calendar-weekdays">
+          <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+        </div>
+        <div class="calendar-grid" id="calendarGrid"></div>
+        <div class="calendar-legend">
+          <span><i class="dot dot-period"></i>经期</span>
+          <span><i class="dot dot-predicted"></i>预测经期</span>
+          <span><i class="dot dot-ovulation"></i>排卵日</span>
+          <span><i class="dot dot-fertile"></i>易孕期</span>
+          <span><i class="dot dot-log"></i>有记录</span>
+        </div>
+      </div>
+      <p class="hint">💡 点击日历上的任意日期，即可记录该天的经期、症状和心情</p>
+    </section>
+
+    <!-- ========== 记录页 ========== -->
+    <section id="page-log" class="page">
+      <div class="log-card">
+        <div class="log-date-nav">
+          <button class="nav-btn" id="logPrevDay" aria-label="前一天">‹</button>
+          <div class="log-date-text">
+            <div class="log-date-label" id="logDateLabel"></div>
+            <div class="log-date-sub" id="logDateSub"></div>
+          </div>
+          <button class="nav-btn" id="logNextDay" aria-label="后一天">›</button>
+        </div>
+
+        <button class="period-toggle" id="periodToggle"></button>
+
+        <h3 class="section-title">😣 症状</h3>
+        <div class="chip-grid" id="symptomChips"></div>
+
+        <h3 class="section-title">💭 心情</h3>
+        <div class="mood-row" id="moodRow"></div>
+
+        <h3 class="section-title">📝 备注</h3>
+        <textarea id="noteInput" rows="3" placeholder="今天想记录点什么…"></textarea>
+
+        <p class="save-hint" id="saveHint">已自动保存 ✓</p>
+      </div>
+    </section>
+
+    <!-- ========== 统计页 ========== -->
+    <section id="page-stats" class="page">
+      <div class="stat-cards">
+        <div class="stat-card">
+          <span class="stat-value" id="statAvgCycle">--</span>
+          <label>平均周期 (天)</label>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value" id="statAvgPeriod">--</span>
+          <label>平均经期 (天)</label>
+        </div>
+        <div class="stat-card">
+          <span class="stat-value" id="statCount">0</span>
+          <label>已记录次数</label>
+        </div>
+      </div>
+
+      <div class="next-card" id="nextCard"></div>
+
+      <div class="panel-card">
+        <h3 class="section-title">📊 近 6 次周期长度</h3>
+        <div class="bar-chart" id="cycleChart"></div>
+      </div>
+
+      <div class="panel-card">
+        <h3 class="section-title">🗂 经期历史</h3>
+        <div id="historyList"></div>
+      </div>
+
+      <p class="privacy-note">🔒 所有数据仅保存在本机浏览器中，不会上传到任何服务器。</p>
+    </section>
+
+  </main>
+
+  <nav class="tab-bar">
+    <button class="tab-btn active" data-page="calendar"><span class="tab-icon">📅</span>日历</button>
+    <button class="tab-btn" data-page="log"><span class="tab-icon">✏️</span>记录</button>
+    <button class="tab-btn" data-page="stats"><span class="tab-icon">📊</span>统计</button>
+  </nav>
+
+</div>
+<script src="js/app.js"></script>
+</body>
+</html>
