@@ -2,47 +2,45 @@
 <html lang="zh-CN" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>架构术语学习通</title>
+
+<!-- PWA -->
+<meta name="theme-color" content="#0e1117" id="metaTheme">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="术语学习">
+<meta name="format-detection" content="telephone=no, email=no, address=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%235b8cff'/><text x='50' y='70' font-size='58' text-anchor='middle' fill='white' font-family='sans-serif'>架</text></svg>">
 <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
 <div class="app">
-  <aside class="sidebar">
-    <div class="brand">
+
+  <!-- 顶部 App 栏 -->
+  <header class="appbar">
+    <div class="appbar-left">
       <div class="logo">架</div>
-      <div class="brand-text">
-        <h1>架构术语学习通</h1>
-        <p>像背单词一样掌握架构术语</p>
+      <div class="appbar-text">
+        <h1 id="pageTitle">今日学习</h1>
+        <p id="pageSub">按间隔重复安排复习</p>
       </div>
     </div>
-
-    <nav class="nav" id="nav">
-      <button class="nav-item active" data-view="learn"><span class="ic">◎</span>学习</button>
-      <button class="nav-item" data-view="library"><span class="ic">▤</span>词库</button>
-      <button class="nav-item" data-view="quiz"><span class="ic">✓</span>测试</button>
-      <button class="nav-item" data-view="stats"><span class="ic">▲</span>统计</button>
-      <button class="nav-item" data-view="settings"><span class="ic">⚙</span>设置</button>
-      <button class="nav-item" data-view="account"><span class="ic">☺</span>账号</button>
-    </nav>
-
-    <div class="side-card">
-      <div class="side-title">今日进度<span id="sideUser" class="side-user"></span></div>
-      <div class="side-row"><span>新学</span><b id="sideNew">0</b></div>
-      <div class="side-row"><span>复习</span><b id="sideRev">0</b></div>
-      <div class="side-row"><span>连续天数</span><b id="sideStreak">0</b></div>
+    <div class="appbar-right">
+      <div class="appbar-stat" id="appbarStat">
+        <span>新 <b id="sideNew">0</b></span>
+        <span>复 <b id="sideRev">0</b></span>
+        <span>连 <b id="sideStreak">0</b></span>
+      </div>
+      <button class="icon-btn" id="themeBtn" title="切换主题" aria-label="切换主题">☾</button>
     </div>
-  </aside>
+  </header>
 
+  <!-- 主区 -->
   <main class="main">
-    <header class="topbar">
-      <div>
-        <h2 id="pageTitle">今日学习</h2>
-        <p id="pageSub">按间隔重复安排复习，稳步把这些术语变成本能</p>
-      </div>
-      <button class="icon-btn" id="themeBtn" title="切换主题">☾</button>
-    </header>
 
     <!-- 学习 -->
     <section class="view active" id="view-learn">
@@ -62,7 +60,7 @@
               <div class="fc-term" id="fTerm"></div>
               <div class="fc-en" id="fEn"></div>
               <div class="fc-ja" id="fJa"></div>
-              <div class="fc-hint">点击卡片 / 按 空格 查看释义</div>
+              <div class="fc-hint">轻触卡片查看释义 · 左右滑动可翻卡</div>
             </div>
             <div class="fc-face fc-back">
               <div class="fc-term-sm" id="bTerm"></div>
@@ -98,15 +96,15 @@
       </div>
 
       <div class="controls" id="controls">
-        <button class="btn ghost" id="btnSpeak">朗读</button>
-        <button class="btn ghost" id="btnFlip">翻卡 <kbd>空格</kbd></button>
+        <button class="btn ghost" id="btnSpeak">🔊 朗读</button>
+        <button class="btn ghost" id="btnFlip">翻卡</button>
         <button class="btn ghost" id="btnBgm">♪ BGM</button>
       </div>
 
       <div class="rate disabled" id="rateBar">
-        <button class="btn bad" data-r="0">不认识 <kbd>1</kbd></button>
-        <button class="btn warn" data-r="1">模糊 <kbd>2</kbd></button>
-        <button class="btn good" data-r="2">认识 <kbd>3</kbd></button>
+        <button class="btn bad" data-r="0">不认识</button>
+        <button class="btn warn" data-r="1">模糊</button>
+        <button class="btn good" data-r="2">认识</button>
       </div>
     </section>
 
@@ -138,7 +136,7 @@
             <option value="20">20 题</option>
           </select>
         </div>
-        <button class="btn primary" id="btnQuizStart">开始测试</button>
+        <button class="btn primary block" id="btnQuizStart">开始测试</button>
       </div>
 
       <div class="panel hidden" id="quizPlay">
@@ -150,7 +148,7 @@
         <div class="quiz-tip" id="quizTip"></div>
         <div class="quiz-options" id="quizOptions"></div>
         <div class="quiz-feedback hidden" id="quizFeedback"></div>
-        <button class="btn primary hidden" id="btnQuizNext">下一题</button>
+        <button class="btn primary block hidden" id="btnQuizNext">下一题</button>
       </div>
 
       <div class="panel hidden" id="quizResult">
@@ -159,7 +157,7 @@
           <div><b id="qTotal">0</b><span>题目</span></div>
           <div><b id="qRight">0</b><span>答对</span></div>
           <div><b id="qAcc">0%</b><span>正确率</span></div>
-          <div><b id="qWrong">0</b><span>进入难词本</span></div>
+          <div><b id="qWrong">0</b><span>进难词本</span></div>
         </div>
         <div class="sum-actions">
           <button class="btn primary" id="btnQuizAgain">再来一组</button>
@@ -227,11 +225,11 @@
         </div>
         <div class="form-row">
           <label>翻卡后自动朗读</label>
-          <input type="checkbox" id="setSpeak">
+          <input type="checkbox" id="setSpeak" class="switch">
         </div>
         <div class="form-row">
           <label>学习背景音乐 BGM</label>
-          <input type="checkbox" id="setBgm">
+          <input type="checkbox" id="setBgm" class="switch">
         </div>
         <div class="form-row">
           <label>BGM 音量</label>
@@ -239,13 +237,21 @@
         </div>
         <div class="form-row">
           <label>操作音效</label>
-          <input type="checkbox" id="setSfx">
+          <input type="checkbox" id="setSfx" class="switch">
         </div>
         <div class="form-row">
           <label>音效音量</label>
           <input type="range" id="setSfxVol" min="0" max="100" step="5">
         </div>
-        <p class="muted">BGM 与音效都由浏览器实时合成（和弦垫 + 铃音 / 答对上行三音、答错下行滑音），不下载任何音频文件，离线也能播。音效包含：答对、答错、模糊、翻卡、界面切换。</p>
+        <p class="muted">BGM 与音效都由浏览器实时合成（和弦垫 + 铃音 / 答对上行三音、答错下行滑音），不下载任何音频文件，离线也能播。</p>
+      </div>
+
+      <div class="panel">
+        <h3>安装到手机</h3>
+        <p class="muted" id="installTip">把本应用添加到主屏幕，即可像原生 App 一样全屏打开，断网也能学。</p>
+        <div class="sum-actions">
+          <button class="btn primary" id="btnInstall">添加到主屏幕</button>
+        </div>
       </div>
 
       <div class="panel">
@@ -260,37 +266,18 @@
       </div>
 
       <div class="panel">
-        <h3>快捷键</h3>
+        <h3>手势与快捷键</h3>
         <ul class="keys">
-          <li><kbd>空格</kbd> 翻卡</li>
-          <li><kbd>1</kbd> 不认识</li>
-          <li><kbd>2</kbd> 模糊</li>
-          <li><kbd>3</kbd> 认识</li>
-          <li><kbd>B</kbd> BGM 开关</li>
-          <li><kbd>Esc</kbd> 关闭弹窗</li>
+          <li><kbd>轻触卡片</kbd> 翻卡</li>
+          <li><kbd>右滑</kbd> 认识 · <kbd>上滑</kbd> 模糊 · <kbd>左滑</kbd> 不认识</li>
+          <li class="kbd-only"><kbd>空格</kbd> 翻卡 · <kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> 评分</li>
+          <li class="kbd-only"><kbd>B</kbd> BGM 开关 · <kbd>Esc</kbd> 关闭弹窗</li>
         </ul>
       </div>
     </section>
+
     <!-- 账号 -->
     <section class="view" id="view-account">
-      <details class="panel adv-config">
-        <summary>高级：更换 / 自定义云端服务</summary>
-        <p class="muted">已内置默认 Supabase 项目，直接登录即可跨设备同步。想换成自己的项目，在这里覆盖（配置只存在本机浏览器，不会写进代码仓库）。</p>
-        <div class="form-row">
-          <label>Project URL</label>
-          <input type="text" id="sbUrl" placeholder="https://xxxx.supabase.co" class="wide">
-        </div>
-        <div class="form-row">
-          <label>anon key</label>
-          <input type="password" id="sbKey" placeholder="eyJhbGciOi..." class="wide">
-        </div>
-        <div class="sum-actions" style="justify-content:flex-start">
-          <button class="btn primary" id="btnSaveCfg">保存配置</button>
-          <button class="btn ghost" id="btnClearCfg">恢复内置配置</button>
-        </div>
-        <p class="muted" style="margin-top:10px">换成自己的项目：到 supabase.com 新建 → Settings → API 复制这两个值，并在 SQL Editor 执行 README 中的建表语句。</p>
-      </details>
-
       <div class="panel" id="acctAuth">
         <h3>登录 / 注册</h3>
         <div class="form-row">
@@ -319,8 +306,35 @@
         </div>
         <p class="muted" style="margin-top:10px">两端都在线时会自动同步：本机改动 2.5 秒后上传，切回页面时拉取云端最新数据。</p>
       </div>
+
+      <details class="panel adv-config">
+        <summary>高级：更换 / 自定义云端服务</summary>
+        <p class="muted">已内置默认 Supabase 项目，直接登录即可跨设备同步。想换成自己的项目，在这里覆盖（配置只存在本机浏览器，不会写进代码仓库）。</p>
+        <div class="form-row">
+          <label>Project URL</label>
+          <input type="text" id="sbUrl" placeholder="https://xxxx.supabase.co" class="wide">
+        </div>
+        <div class="form-row">
+          <label>anon key</label>
+          <input type="password" id="sbKey" placeholder="eyJhbGciOi..." class="wide">
+        </div>
+        <div class="sum-actions" style="justify-content:flex-start">
+          <button class="btn primary" id="btnSaveCfg">保存配置</button>
+          <button class="btn ghost" id="btnClearCfg">恢复内置配置</button>
+        </div>
+      </details>
     </section>
   </main>
+
+  <!-- 底部 Tab 导航 -->
+  <nav class="tabbar" id="nav">
+    <button class="tab-item active" data-view="learn"><span class="ic">◎</span><span class="lb">学习</span></button>
+    <button class="tab-item" data-view="library"><span class="ic">▤</span><span class="lb">词库</span></button>
+    <button class="tab-item" data-view="quiz"><span class="ic">✓</span><span class="lb">测试</span></button>
+    <button class="tab-item" data-view="stats"><span class="ic">▲</span><span class="lb">统计</span></button>
+    <button class="tab-item" data-view="settings"><span class="ic">⚙</span><span class="lb">设置</span></button>
+    <button class="tab-item" data-view="account"><span class="ic">☺</span><span class="lb">账号</span></button>
+  </nav>
 </div>
 
 <div class="modal hidden" id="modal">
@@ -340,5 +354,6 @@
 <script src="assets/js/sync.js"></script>
 <script src="assets/js/bgm.js"></script>
 <script src="assets/js/app.js"></script>
+<script src="assets/js/pwa.js"></script>
 </body>
 </html>

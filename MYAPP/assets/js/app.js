@@ -26,7 +26,7 @@
   function switchView(name) {
     var list = document.querySelectorAll('.view');
     for (var i = 0; i < list.length; i++) list[i].classList.toggle('active', list[i].id === 'view-' + name);
-    var items = document.querySelectorAll('.nav-item');
+    var items = document.querySelectorAll('.tab-item');
     for (var j = 0; j < items.length; j++) items[j].classList.toggle('active', items[j].getAttribute('data-view') === name);
     $('#pageTitle').textContent = VIEWS[name][0];
     $('#pageSub').textContent = VIEWS[name][1];
@@ -37,8 +37,10 @@
     window.scrollTo(0, 0);
   }
 
-  var toastTimer;
-  function toast(msg) {
+  /* 手势护栏时间戳：滑动评分后 600ms 内忽略合成 click */
+  var guardUntil = 0;
+
+  var toastTimer;  function toast(msg) {
     var el = $('#toast');
     el.textContent = msg;
     el.classList.add('show');
@@ -60,6 +62,11 @@
     if (s === 'new') return { text: '未学习', cls: '' };
     if (s === 'mastered') return { text: '已掌握', cls: 'mastered' };
     return { text: '学习中', cls: 'learning' };
+  }
+
+  /* 触觉反馈（iOS Safari 不支持时静默跳过） */
+  function buzz(ms) {
+    try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {}
   }
 
   function levelText(lv) { return ['', '基础', '进阶', '高阶'][lv] || '基础'; }
@@ -153,12 +160,14 @@
   }
 
   function flip(e) {
+    if (Date.now() < guardUntil) return;                 // 滑动手势后的合成点击不翻卡
     if (e && e.target.closest && e.target.closest('[data-goto]')) return; // 点相关术语不翻卡
     var card = $('#flashcard');
     if (card.classList.contains('gone')) return;
     card.classList.toggle('flipped');
     var flipped = card.classList.contains('flipped');
     $('#rateBar').classList.toggle('disabled', !flipped);
+    buzz(8);
     if (window.Sfx) Sfx.flip();
     if (flipped && !Store.data.settings.autoSpeak) { /* 翻到背面不自动朗读，避免打断阅读 */ }
   }
@@ -167,6 +176,7 @@
     if ($('#rateBar').classList.contains('disabled')) return;
     var item = session.items[session.idx];
     if (!item) return;
+    buzz(r === 2 ? 18 : 30);
     if (window.Sfx) { if (r === 2) Sfx.correct(); else if (r === 1) Sfx.fuzzy(); else Sfx.wrong(); }
     var c = Store.card(item.id);
     SRS.schedule(c, r);
@@ -194,11 +204,13 @@
 
   function updateSide() {
     var d = Store.dailyCounts();
-    $('#sideNew').textContent = d.n;
-    $('#sideRev').textContent = d.r;
-    $('#sideStreak').textContent = d.streak;
+    var n = $('#sideNew'), r = $('#sideRev'), k = $('#sideStreak'), u = $('#sideUser');
+    if (n) n.textContent = d.n;
+    if (r) r.textContent = d.r;
+    if (k) k.textContent = d.streak;
+    if (u) u.textContent = '';
     var s = Sync.state();
-    $('#sideUser').textContent = s.email ? '· ' + s.email.split('@')[0] : '· 本地模式';
+    if (u && s.email) u.textContent = '· ' + s.email.split('@')[0];
   }
 
   /* ---------------- 账号与同步 ---------------- */
@@ -471,16 +483,57 @@
 
   /* ---------------- 事件绑定 ---------------- */
   $('#nav').addEventListener('click', function (e) {
-    var btn = e.target.closest('.nav-item');
-    if (btn) { if (window.Sfx) Sfx.click(); switchView(btn.getAttribute('data-view')); }
+    var btn = e.target.closest('.tab-item');
+    if (btn) { buzz(6); if (window.Sfx) Sfx.click(); switchView(btn.getAttribute('data-view')); }
   });
 
   document.addEventListener('click', function (e) {
     var jump = e.target.closest('[data-view]');
-    if (jump && !jump.classList.contains('nav-item')) { if (window.Sfx) Sfx.click(); switchView(jump.getAttribute('data-view')); }
+    if (jump && !jump.classList.contains('tab-item')) { if (window.Sfx) Sfx.click(); switchView(jump.getAttribute('data-view')); }
   });
 
   $('#flashcard').addEventListener('click', flip);
+
+  /* ---- 触屏手势：未翻面横滑=翻卡；翻面后 右滑=认识 左滑=不认识 上滑=模糊 ---- */
+  (function () {
+    var card = $('#flashcard');
+    var sx = 0, sy = 0, st = 0, scrolled = false;
+
+    card.addEventListener('touchstart', function (e) {
+      if (card.classList.contains('gone')) return;
+      sx = e.touches[0].clientX;
+      sy = e.touches[0].clientY;
+      st = Date.now();
+      scrolled = false;
+    }, { passive: true });
+
+    card.addEventListener('touchmove', function () {
+      // 背面内容被滚动过就视为「阅读中」，本次触摸不触发评分手势
+      var face = card.querySelector('.fc-back');
+      if (face && face.scrollTop > 2) scrolled = true;
+    }, { passive: true });
+
+    card.addEventListener('touchend', function (e) {
+      if (card.classList.contains('gone') || scrolled) return;
+      var dx = e.changedTouches[0].clientX - sx;
+      var dy = e.changedTouches[0].clientY - sy;
+      var adx = Math.abs(dx), ady = Math.abs(dy);
+      var quick = Date.now() - st < 800;
+      var flipped = card.classList.contains('flipped');
+
+      if (adx > 60 && adx > ady * 1.4 && quick) {
+        guardUntil = Date.now() + 600;
+        if (!flipped) { flip(); return; }        // 未翻面：横滑先翻卡
+        if (dx < 0) rate(0); else rate(2);       // 左滑不认识 / 右滑认识
+        return;
+      }
+      if (flipped && dy < -70 && ady > adx * 1.6 && quick) {
+        guardUntil = Date.now() + 600;
+        rate(1);                                  // 上滑模糊
+      }
+    });
+  })();
+
   $('#btnFlip').addEventListener('click', flip);
   $('#btnSpeak').addEventListener('click', function () {
     var item = session.items[session.idx];
