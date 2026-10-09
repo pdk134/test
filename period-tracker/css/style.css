@@ -200,6 +200,7 @@ body {
   transition: transform 0.1s;
 }
 .day-cell:active { transform: scale(0.92); }
+.cal-empty { visibility: hidden; aspect-ratio: 1; }
 .day-cell.other-month { color: #d9c8cf; }
 .day-cell.today { border-color: var(--primary); font-weight: 700; }
 .day-cell.selected { box-shadow: 0 0 0 2px var(--blue) inset; }

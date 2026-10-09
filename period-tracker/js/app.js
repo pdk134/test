@@ -326,19 +326,23 @@ function renderCalendar() {
   // 当前经期的"延续预测"区间（只标了开始日时，向后自动延伸）
   const ongoing = getOngoingPeriods(periods, pred ? pred.avgPeriodLen : DEFAULT_PERIOD);
 
-  // 周一为一周的开始
+  // 只渲染当前月份：周一为一周开始，1号之前的格子用空白占位保持列对齐（不显示其他月份）
   const first = new Date(y, m, 1);
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
   let startOffset = first.getDay() - 1;
   if (startOffset < 0) startOffset = 6;
-  const gridStart = addDays(first, -startOffset);
 
   let html = '';
-  for (let i = 0; i < 42; i++) {
-    const d = addDays(gridStart, i);
+  // 1号前的空白占位（不可点击、不可见，仅用于对齐周列）
+  for (let i = 0; i < startOffset; i++) {
+    html += '<div class="cal-empty"></div>';
+  }
+  // 仅当前月份的天数
+  for (let day = 1; day <= daysInMonth; day++) {
+    const d = new Date(y, m, day);
     const s = fmt(d);
     const classes = ['day-cell'];
 
-    if (d.getMonth() !== m) classes.push('other-month');
     if (s === tStr) classes.push('today');
     if (s === state.selectedDate) classes.push('selected');
 
@@ -360,7 +364,7 @@ function renderCalendar() {
 
     const hasLog = !!state.dailyLogs[s];
     html += '<button class="' + classes.join(' ') + '" data-date="' + s + '">' +
-      d.getDate() +
+      day +
       (hasLog ? '<span class="log-dot"></span>' : '') +
       '</button>';
   }
