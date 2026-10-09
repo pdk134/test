@@ -17,7 +17,8 @@
   var VIEWS = {
     learn: ['今日学习', '按间隔重复安排复习，稳步把这些术语变成本能'],
     library: ['术语词库', '浏览、检索全部术语，支持按分类与状态筛选'],
-    quiz: ['选择题测试', '术语 ↔ 释义 双向考察，答错自动进入难词本'],
+    quiz: ['真题练习', '选择题 / 案例题 / 论文题，历年真题全覆盖'],
+    points: ['教材考点', '第二版教材按章抽考点，标记掌握专项突破'],
     stats: ['学习统计', '掌握进度、每日学习量与难词本'],
     settings: ['设置', '学习计划、数据备份与快捷键'],
     account: ['账号与同步', '登录后可在手机与电脑之间同步学习进度']
@@ -34,6 +35,7 @@
     if (name === 'library') renderLibrary();
     if (name === 'stats') renderStats();
     if (name === 'account') renderAccount();
+    if (name === 'points') renderPoints();
     window.scrollTo(0, 0);
   }
 
@@ -741,7 +743,7 @@
   $('#btnQuizNext').addEventListener('click', function () { quiz.i++; renderQuestion(); });
   $('#btnQuizAgain').addEventListener('click', function () { startQuiz(+$('#quizCount').value); });
 
-  /* 真题模块 */
+  /* 真题模块（术语自测 / 选择题 / 案例 / 论文） */
   $('#quizSeg').addEventListener('click', function (e) {
     var b = e.target.closest('.seg-item');
     if (!b) return;
@@ -750,19 +752,15 @@
     var seg = b.getAttribute('data-seg');
     var items = document.querySelectorAll('#quizSeg .seg-item');
     for (var i = 0; i < items.length; i++) items[i].classList.toggle('active', items[i] === b);
-    $('#quizTerm').classList.toggle('hidden', seg !== 'term');
-    $('#quizExam').classList.toggle('hidden', seg !== 'exam');
-    // 切换分段时，把另一侧的答题进度重置回起始页，避免残留
-    if (seg === 'term') {
-      $('#examPlay').classList.add('hidden');
-      $('#examResult').classList.add('hidden');
-      $('#examStart').classList.remove('hidden');
-    } else {
-      $('#quizPlay').classList.add('hidden');
-      $('#quizResult').classList.add('hidden');
-      $('#quizStart').classList.remove('hidden');
-      renderExamStart();
-    }
+    var panels = { term: '#quizTerm', exam: '#quizExam', case: '#quizCase', essay: '#quizEssay' };
+    Object.keys(panels).forEach(function (k) { $(panels[k]).classList.toggle('hidden', k !== seg); });
+    // 切换分段时把其余分段重置回起始页，避免进度残留
+    if (seg !== 'term') { $('#quizPlay').classList.add('hidden'); $('#quizResult').classList.add('hidden'); $('#quizStart').classList.remove('hidden'); }
+    if (seg !== 'exam') { $('#examPlay').classList.add('hidden'); $('#examResult').classList.add('hidden'); $('#examStart').classList.remove('hidden'); }
+    if (seg !== 'case') { $('#casePlay').classList.add('hidden'); $('#caseStart').classList.remove('hidden'); }
+    if (seg === 'exam') renderExamStart();
+    if (seg === 'case') renderCaseStart();
+    if (seg === 'essay') { renderEssayTpl(); renderEssayList(); }
   });
   $('#examYears').addEventListener('click', function (e) {
     var c = e.target.closest('[data-ef]');
@@ -797,6 +795,183 @@
     $('#examResult').classList.add('hidden');
     $('#examStart').classList.remove('hidden');
     renderExamStart();
+  });
+
+  /* ================= 案例题（下午一） ================= */
+  var CASE_ALL = (window.EXAM_CASES || []).slice();
+  var caseState = { pool: [], i: 0, filter: 'all' };
+
+  function caseSessions() {
+    var seen = [], list = [];
+    CASE_ALL.forEach(function (c) { var k = c.y + c.s; if (seen.indexOf(k) < 0) { seen.push(k); list.push({ key: k, y: c.y, s: c.s }); } });
+    list.sort(function (a, b) { return b.y - a.y || (b.s === '下半年' ? 1 : 0) - (a.s === '下半年' ? 1 : 0); });
+    return list;
+  }
+  function renderCaseStart() {
+    $('#caseTotal').textContent = CASE_ALL.length;
+    var f = caseState.filter;
+    var chips = '<button class="chip' + (f === 'all' ? ' on' : '') + '" data-cf="all">全部 ' + CASE_ALL.length + ' 套</button>';
+    caseSessions().forEach(function (s) {
+      var n = CASE_ALL.filter(function (c) { return c.y + c.s === s.key; }).length;
+      chips += '<button class="chip' + (f === s.key ? ' on' : '') + '" data-cf="' + s.key + '">' + s.y + ' ' + s.s + ' · ' + n + '</button>';
+    });
+    $('#caseYears').innerHTML = chips;
+  }
+  function startCase() {
+    caseState.pool = caseState.filter === 'all' ? CASE_ALL.slice()
+      : CASE_ALL.filter(function (c) { return c.y + c.s === caseState.filter; });
+    if (!caseState.pool.length) { toast('该场次暂无案例'); return; }
+    caseState.i = 0;
+    $('#caseStart').classList.add('hidden');
+    $('#casePlay').classList.remove('hidden');
+    renderCaseQ();
+  }
+  function renderCaseQ() {
+    if (caseState.i >= caseState.pool.length) { showCaseResult(); return; }
+    var c = caseState.pool[caseState.i];
+    $('#caseBar').style.width = Math.round(caseState.i / caseState.pool.length * 100) + '%';
+    $('#caseCounter').textContent = (caseState.i + 1) + ' / ' + caseState.pool.length;
+    var meta = '<span class="tag">' + c.y + ' ' + c.s + '</span>'
+      + (c.must ? '<span class="tag lv">必答题</span>' : '')
+      + (c.src ? '<span class="tag"> ' + c.src + '</span>' : '');
+    $('#caseMeta').innerHTML = meta;
+    var html = '<div class="case-scene"><b>背景</b>' + (c.scene || '').replace(/</g, '&lt;') + '</div>';
+    html += '<h4 class="case-topic">' + c.no + '、' + c.topic + '</h4>';
+    (c.questions || []).forEach(function (q, idx) {
+      html += '<div class="case-q"><div class="case-qh"><span class="case-no">问题' + (idx + 1) + '</span>'
+        + (q.score ? '<span class="case-score">' + q.score + ' 分</span>' : '') + '</div>'
+        + '<div class="case-qt">' + (q.q || '').replace(/</g, '&lt;') + '</div>'
+        + '<button class="btn ghost case-reveal" data-ci="' + idx + '">显示参考答案</button>'
+        + '<div class="case-a hidden" id="caseA' + idx + '">' + (q.a || '').replace(/</g, '&lt;') + '</div></div>';
+    });
+    html += '<button class="btn primary block" id="btnCaseNext">下一题</button>';
+    $('#caseBody').innerHTML = html;
+  }
+  function showCaseResult() {
+    $('#casePlay').classList.add('hidden');
+    $('#caseStart').classList.remove('hidden');
+    renderCaseStart();
+    toast('本套练习完成');
+  }
+  $('#caseYears').addEventListener('click', function (e) {
+    var c = e.target.closest('[data-cf]'); if (!c) return;
+    caseState.filter = c.getAttribute('data-cf'); renderCaseStart();
+  });
+  $('#btnCaseStart').addEventListener('click', startCase);
+  $('#btnCaseExit').addEventListener('click', function () {
+    if (window.Sfx) Sfx.click();
+    $('#casePlay').classList.add('hidden'); $('#caseStart').classList.remove('hidden'); renderCaseStart();
+  });
+  $('#caseBody').addEventListener('click', function (e) {
+    var rev = e.target.closest('.case-reveal');
+    if (rev) {
+      var a = $('#caseA' + rev.getAttribute('data-ci'));
+      if (a) { a.classList.toggle('hidden'); rev.textContent = a.classList.contains('hidden') ? '显示参考答案' : '隐藏参考答案'; }
+      return;
+    }
+    if (e.target.closest('#btnCaseNext')) { caseState.i++; renderCaseQ(); }
+  });
+
+  /* ================= 论文题（下午二） ================= */
+  var ESSAY_ALL = (window.EXAM_ESSAYS || []).slice();
+  var essayState = { filter: 'all' };
+
+  function essaySessions() {
+    var seen = [], list = [];
+    ESSAY_ALL.forEach(function (e) { var k = e.y + e.s; if (seen.indexOf(k) < 0) { seen.push(k); list.push({ key: k, y: e.y, s: e.s }); } });
+    list.sort(function (a, b) { return b.y - a.y || (b.s === '下半年' ? 1 : 0) - (a.s === '下半年' ? 1 : 0); });
+    return list;
+  }
+  function renderEssayTpl() {
+    var t = window.EXAM_ESSAY_TPL || {};
+    $('#essayTpl').innerHTML = '<h3>论文写作通用模板</h3>'
+      + '<div class="tpl-row"><b>摘要公式</b><p>' + (t.summary || '') + '</p></div>'
+      + '<div class="tpl-row"><b>五段式</b><p>' + (t.structure || '') + '</p></div>'
+      + '<div class="tpl-row"><b>万能项目背景</b><p>' + (t.background || '') + '</p></div>';
+  }
+  function renderEssayList() {
+    var f = essayState.filter;
+    var list = f === 'all' ? ESSAY_ALL.slice()
+      : ESSAY_ALL.filter(function (e) { return e.y + e.s === f; });
+    list.sort(function (a, b) { return b.y - a.y || (b.s === '下半年' ? 1 : 0) - (a.s === '下半年' ? 1 : 0) || a.no - b.no; });
+    var chips = '<button class="chip' + (f === 'all' ? ' on' : '') + '" data-ef2="all">全部 ' + ESSAY_ALL.length + ' 题</button>';
+    essaySessions().forEach(function (s) {
+      var n = ESSAY_ALL.filter(function (e) { return e.y + e.s === s.key; }).length;
+      chips += '<button class="chip' + (f === s.key ? ' on' : '') + '" data-ef2="' + s.key + '">' + s.y + ' ' + s.s + ' · ' + n + '</button>';
+    });
+    $('#essayYears').innerHTML = chips;
+    var html = '';
+    list.forEach(function (e) {
+      html += '<div class="essay-card" data-eid="' + e.id + '">'
+        + '<div class="ec-head"><span class="tag">' + e.y + ' ' + e.s + '</span><span class="tag lv">第 ' + e.no + ' 题</span></div>'
+        + '<div class="ec-topic">' + e.topic + '</div>'
+        + '<div class="ec-tips hidden">' + (e.tips || '').replace(/</g, '&lt;') + '</div>'
+        + '<button class="btn ghost ec-toggle">查看写作要点</button></div>';
+    });
+    $('#essayList').innerHTML = html;
+  }
+  $('#essayYears').addEventListener('click', function (e) {
+    var c = e.target.closest('[data-ef2]'); if (!c) return;
+    essayState.filter = c.getAttribute('data-ef2'); renderEssayList();
+  });
+  $('#essayList').addEventListener('click', function (e) {
+    var card = e.target.closest('.essay-card'); if (!card) return;
+    var tips = card.querySelector('.ec-tips');
+    var btn = card.querySelector('.ec-toggle');
+    if (tips) { tips.classList.toggle('hidden'); if (btn) btn.textContent = tips.classList.contains('hidden') ? '查看写作要点' : '隐藏写作要点'; }
+  });
+
+  /* ================= 教材考点（第二版） ================= */
+  var POINTS = (window.TEXTBOOK_POINTS || []).slice();
+  var ptState = { filter: 'all' };
+  var ptStore = (function () {
+    var KEY = 'arch-term-points';
+    var data = {};
+    try { data = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) {}
+    return {
+      has: function (id) { return !!data[id]; },
+      mark: function (id, on) { if (on) data[id] = 1; else delete data[id]; try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {} },
+      count: function () { return Object.keys(data).length; }
+    };
+  })();
+  function renderPoints() {
+    var f = ptState.filter;
+    var chips = '<button class="chip' + (f === 'all' ? ' on' : '') + '" data-pf="all">全部 ' + POINTS.length + ' 章</button>';
+    POINTS.forEach(function (chp) {
+      chips += '<button class="chip' + (f === ('c' + chp.ch) ? ' on' : '') + '" data-pf="c' + chp.ch + '">第' + chp.ch + '章 ' + chp.title + '</button>';
+    });
+    $('#ptCats').innerHTML = chips;
+    var list = f === 'all' ? POINTS.slice() : POINTS.filter(function (c) { return 'c' + c.ch === f; });
+    var html = '', total = 0, mastered = 0;
+    list.forEach(function (chp) {
+      html += '<div class="point-ch"><h4 class="point-ch-h">第' + chp.ch + '章 · ' + chp.title + '</h4>';
+      chp.points.forEach(function (p) {
+        var id = 'p' + chp.ch + '_' + p.t, on = ptStore.has(id);
+        total++; if (on) mastered++;
+        html += '<div class="point-card' + (on ? ' mastered' : '') + '" data-pid="' + id + '">'
+          + '<div class="pc-head"><span class="pc-t">' + p.t.replace(/</g, '&lt;') + '</span><span class="pc-tag tag lv">难度 ' + p.tag + '</span></div>'
+          + '<div class="pc-d">' + p.d.replace(/</g, '&lt;') + '</div>'
+          + '<button class="btn ghost pc-master">' + (on ? '已掌握 ✓' : '标记掌握') + '</button></div>';
+      });
+      html += '</div>';
+    });
+    $('#ptList').innerHTML = html;
+    $('#ptTotal').textContent = total;
+    $('#ptMastered').textContent = mastered;
+  }
+  $('#ptCats').addEventListener('click', function (e) {
+    var c = e.target.closest('[data-pf]'); if (!c) return;
+    ptState.filter = c.getAttribute('data-pf'); renderPoints();
+  });
+  $('#ptList').addEventListener('click', function (e) {
+    var card = e.target.closest('.point-card'); if (!card) return;
+    var id = card.getAttribute('data-pid');
+    var on = !ptStore.has(id);
+    ptStore.mark(id, on);
+    card.classList.toggle('mastered', on);
+    var btn = card.querySelector('.pc-master');
+    if (btn) btn.textContent = on ? '已掌握 ✓' : '标记掌握';
+    $('#ptMastered').textContent = ptStore.count();
   });
 
   $('#setNew').addEventListener('change', function (e) { Store.data.settings.dailyNew = +e.target.value; Store.touch(); });
