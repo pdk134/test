@@ -125,43 +125,95 @@
 
     <!-- 测试 -->
     <section class="view" id="view-quiz">
-      <div class="panel" id="quizStart">
-        <h3>选择题测试</h3>
-        <p class="muted">从词库中随机抽题，术语 ↔ 释义 双向考察，答错自动进入难词本。</p>
-        <div class="form-row">
-          <label>题量</label>
-          <select id="quizCount">
-            <option value="5">5 题</option>
-            <option value="10" selected>10 题</option>
-            <option value="20">20 题</option>
-          </select>
-        </div>
-        <button class="btn primary block" id="btnQuizStart">开始测试</button>
+      <div class="seg" id="quizSeg">
+        <button class="seg-item active" data-seg="term">术语自测</button>
+        <button class="seg-item" data-seg="exam">历年真题</button>
       </div>
 
-      <div class="panel hidden" id="quizPlay">
-        <div class="progress-line">
-          <div class="bar"><i id="quizBar"></i></div>
-          <span class="counter" id="quizCounter">0 / 0</span>
+      <div id="quizTerm">
+        <div class="panel" id="quizStart">
+          <h3>选择题测试</h3>
+          <p class="muted">从词库中随机抽题，术语 ↔ 释义 双向考察，答错自动进入难词本。</p>
+          <div class="form-row">
+            <label>题量</label>
+            <select id="quizCount">
+              <option value="5">5 题</option>
+              <option value="10" selected>10 题</option>
+              <option value="20">20 题</option>
+            </select>
+          </div>
+          <button class="btn primary block" id="btnQuizStart">开始测试</button>
         </div>
-        <div class="quiz-q" id="quizQ"></div>
-        <div class="quiz-tip" id="quizTip"></div>
-        <div class="quiz-options" id="quizOptions"></div>
-        <div class="quiz-feedback hidden" id="quizFeedback"></div>
-        <button class="btn primary block hidden" id="btnQuizNext">下一题</button>
+
+        <div class="panel hidden" id="quizPlay">
+          <div class="progress-line">
+            <div class="bar"><i id="quizBar"></i></div>
+            <span class="counter" id="quizCounter">0 / 0</span>
+          </div>
+          <div class="quiz-q" id="quizQ"></div>
+          <div class="quiz-tip" id="quizTip"></div>
+          <div class="quiz-options" id="quizOptions"></div>
+          <div class="quiz-feedback hidden" id="quizFeedback"></div>
+          <button class="btn primary block hidden" id="btnQuizNext">下一题</button>
+        </div>
+
+        <div class="panel hidden" id="quizResult">
+          <h3 id="quizScore">测试完成</h3>
+          <div class="sum-grid">
+            <div><b id="qTotal">0</b><span>题目</span></div>
+            <div><b id="qRight">0</b><span>答对</span></div>
+            <div><b id="qAcc">0%</b><span>正确率</span></div>
+            <div><b id="qWrong">0</b><span>进难词本</span></div>
+          </div>
+          <div class="sum-actions">
+            <button class="btn primary" id="btnQuizAgain">再来一组</button>
+            <button class="btn ghost" data-view="library">查看词库</button>
+          </div>
+        </div>
       </div>
 
-      <div class="panel hidden" id="quizResult">
-        <h3 id="quizScore">测试完成</h3>
-        <div class="sum-grid">
-          <div><b id="qTotal">0</b><span>题目</span></div>
-          <div><b id="qRight">0</b><span>答对</span></div>
-          <div><b id="qAcc">0%</b><span>正确率</span></div>
-          <div><b id="qWrong">0</b><span>进难词本</span></div>
+      <div id="quizExam" class="hidden">
+        <div class="panel" id="examStart">
+          <h3>历年真题 · 选择题</h3>
+          <p class="muted">系统架构设计师（软考高级）综合知识真题，2020 下半年至 2025 下半年共 <b id="examTotal">0</b> 题，含答案与解析。2023 下半年起为机考考生回忆版。</p>
+          <div class="chips" id="examYears"></div>
+          <div class="form-row">
+            <label>题量</label>
+            <select id="examCount">
+              <option value="10" selected>10 题</option>
+              <option value="20">20 题</option>
+              <option value="30">30 题</option>
+              <option value="9999">整套卷</option>
+            </select>
+          </div>
+          <button class="btn primary block" id="btnExamStart">开始练习</button>
+          <button class="btn ghost block" id="btnExamWrong">错题重练</button>
         </div>
-        <div class="sum-actions">
-          <button class="btn primary" id="btnQuizAgain">再来一组</button>
-          <button class="btn ghost" data-view="library">查看词库</button>
+
+        <div class="panel hidden" id="examPlay">
+          <div class="progress-line">
+            <div class="bar"><i id="examBar"></i></div>
+            <span class="counter" id="examCounter">0 / 0</span>
+          </div>
+          <div class="exam-meta" id="examMeta"></div>
+          <div class="quiz-q" id="examQ"></div>
+          <div class="quiz-options" id="examOptions"></div>
+          <div class="quiz-feedback hidden" id="examFeedback"></div>
+          <button class="btn primary block hidden" id="btnExamNext">下一题</button>
+        </div>
+
+        <div class="panel hidden" id="examResult">
+          <h3 id="examScore">本次练习完成</h3>
+          <div class="sum-grid">
+            <div><b id="eTotal">0</b><span>题目</span></div>
+            <div><b id="eRight">0</b><span>答对</span></div>
+            <div><b id="eAcc">0%</b><span>正确率</span></div>
+            <div><b id="eWrong">0</b><span>进错题本</span></div>
+          </div>
+          <div class="sum-actions">
+            <button class="btn primary" id="btnExamAgain">再来一组</button>
+            <button class="btn ghost" id="btnExamReview">查看错题</button>
+          </div>
         </div>
       </div>
     </section>
@@ -348,6 +400,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="assets/js/terms.js"></script>
+<script src="assets/js/questions.js"></script>
 <script src="assets/js/store.js"></script>
 <script src="assets/js/srs.js"></script>
 <script src="assets/js/config.js"></script>
