@@ -127,7 +127,9 @@
     <section class="view" id="view-quiz">
       <div class="seg" id="quizSeg">
         <button class="seg-item active" data-seg="term">术语自测</button>
-        <button class="seg-item" data-seg="exam">历年真题</button>
+        <button class="seg-item" data-seg="exam">选择题</button>
+        <button class="seg-item" data-seg="case">案例题</button>
+        <button class="seg-item" data-seg="essay">论文题</button>
       </div>
 
       <div id="quizTerm">
@@ -218,6 +220,47 @@
           </div>
         </div>
       </div>
+
+      <!-- 案例题（下午一） -->
+      <div id="quizCase" class="hidden">
+        <div class="panel" id="caseStart">
+          <h3>历年真题 · 案例分析（下午一）</h3>
+          <p class="muted">系统架构设计师（软考高级）案例题，2020 起各场次共 <b id="caseTotal">0</b> 套。2023 下半年起为机考回忆版，含案例背景、子问题与参考答案/要点，开卷自测、可展开看答案。</p>
+          <div class="chips" id="caseYears"></div>
+          <button class="btn primary block" id="btnCaseStart">开始练习</button>
+        </div>
+        <div class="panel hidden" id="casePlay">
+          <div class="progress-line">
+            <div class="bar"><i id="caseBar"></i></div>
+            <span class="counter" id="caseCounter">0 / 0</span>
+            <button class="exit-btn" id="btnCaseExit" title="退出练习">✕ 退出</button>
+          </div>
+          <div class="exam-meta" id="caseMeta"></div>
+          <div class="case-body" id="caseBody"></div>
+          <button class="btn primary block" id="btnCaseNext">下一题</button>
+        </div>
+      </div>
+
+      <!-- 论文题（下午二） -->
+      <div id="quizEssay" class="hidden">
+        <div class="panel tpl-card" id="essayTpl"></div>
+        <div class="panel" id="essayStart">
+          <h3>历年真题 · 论文（下午二）</h3>
+          <p class="muted">系统架构设计师（软考高级）论文题，2020 起各场次题目汇总 + 写作要点。点开题目查看写作框架（摘要公式 / 五段式 / 万能背景）。</p>
+          <div class="chips" id="essayYears"></div>
+        </div>
+        <div class="lib-list" id="essayList"></div>
+      </div>
+    </section>
+
+    <!-- 考点 -->
+    <section class="view" id="view-points">
+      <div class="panel">
+        <h3>教材考点 · 系统架构设计师教程（第2版）</h3>
+        <p class="muted">叶宏等编，清华大学出版社 2022（ISBN 9787302619925）。按章抽取核心考点，点「标记掌握」纳入专项复习。已掌握 <b id="ptMastered">0</b> / <b id="ptTotal">0</b>。</p>
+      </div>
+      <div class="chips" id="ptCats"></div>
+      <div class="lib-list" id="ptList"></div>
     </section>
 
     <!-- 统计 -->
@@ -384,7 +427,8 @@
   <nav class="tabbar" id="nav">
     <button class="tab-item active" data-view="learn"><span class="ic">◎</span><span class="lb">学习</span></button>
     <button class="tab-item" data-view="library"><span class="ic">▤</span><span class="lb">词库</span></button>
-    <button class="tab-item" data-view="quiz"><span class="ic">✓</span><span class="lb">测试</span></button>
+    <button class="tab-item" data-view="quiz"><span class="ic">✓</span><span class="lb">真题</span></button>
+    <button class="tab-item" data-view="points"><span class="ic">▦</span><span class="lb">考点</span></button>
     <button class="tab-item" data-view="stats"><span class="ic">▲</span><span class="lb">统计</span></button>
     <button class="tab-item" data-view="settings"><span class="ic">⚙</span><span class="lb">设置</span></button>
     <button class="tab-item" data-view="account"><span class="ic">☺</span><span class="lb">账号</span></button>
@@ -403,6 +447,9 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="assets/js/terms.js"></script>
 <script src="assets/js/questions.js"></script>
+<script src="assets/js/case.js"></script>
+<script src="assets/js/essay.js"></script>
+<script src="assets/js/points.js"></script>
 <script src="assets/js/store.js"></script>
 <script src="assets/js/srs.js"></script>
 <script src="assets/js/config.js"></script>
