@@ -4,14 +4,23 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>经期小助手</title>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="经期小助手">
+<meta name="theme-color" content="#e8638c">
+<meta name="description" content="简洁的经期记录与预测工具，数据仅保存在本机">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
 <link rel="stylesheet" href="css/style.css">
+<title>经期小助手</title>
 </head>
 <body>
 <div class="app">
 
   <header class="app-header">
     <h1>🌸 经期小助手</h1>
+    <button class="theme-btn" id="themeBtn" title="切换深色模式" aria-label="切换深色模式">🌙</button>
   </header>
 
   <main class="app-main">
@@ -32,7 +41,6 @@
         <div class="calendar-grid" id="calendarGrid"></div>
         <div class="calendar-legend">
           <span><i class="dot dot-period"></i>经期</span>
-          <span><i class="dot dot-end"></i>经期结束日</span>
           <span><i class="dot dot-ongoing"></i>经期中(预测)</span>
           <span><i class="dot dot-predicted"></i>下次经期</span>
           <span><i class="dot dot-ovulation"></i>排卵日</span>
@@ -40,9 +48,7 @@
           <span><i class="dot dot-log"></i>有记录</span>
         </div>
       </div>
-      <p class="hint">💡 标记经期开始日后，会按平均经期长度向后延展出虚线预测；<br>
-        经期真正结束时，在记录页点「经期在这一天结束」，之后的多余预测会消失，<br>
-        并把这次的真实天数记入平均经期长度，用于下一次预测。</p>
+      <p class="hint">💡 标记经期开始日后，会按平均经期长度自动向后延展出虚线预测；点击虚线日期即可确认为经期</p>
     </section>
 
     <!-- ========== 记录页 ========== -->
@@ -58,7 +64,6 @@
         </div>
 
         <button class="period-toggle" id="periodToggle"></button>
-        <button class="period-end-toggle" id="periodEndToggle"></button>
 
         <h3 class="section-title">😣 症状</h3>
         <div class="chip-grid" id="symptomChips"></div>
@@ -90,6 +95,8 @@
         </div>
       </div>
 
+      <div id="alertArea"></div>
+
       <div class="next-card" id="nextCard"></div>
 
       <div class="panel-card">
@@ -100,6 +107,48 @@
       <div class="panel-card">
         <h3 class="section-title">🗂 经期历史</h3>
         <div id="historyList"></div>
+      </div>
+
+      <!-- 数据管理 -->
+      <div class="panel-card">
+        <h3 class="section-title">🔒 数据管理</h3>
+        <p class="panel-desc">所有数据仅保存在本机浏览器。建议定期导出备份，以免清理浏览器数据后丢失。</p>
+        <div class="data-actions">
+          <button class="action-btn" id="exportBtn">
+            <span class="action-icon">⬇️</span>
+            <span>
+              <strong>导出备份</strong>
+              <small>保存为 JSON 文件</small>
+            </span>
+          </button>
+          <button class="action-btn" id="importBtn">
+            <span class="action-icon">⬆️</span>
+            <span>
+              <strong>导入恢复</strong>
+              <small>从备份文件还原</small>
+            </span>
+          </button>
+        </div>
+        <input type="file" id="importFile" accept=".json,application/json" hidden>
+        <p class="data-meta" id="dataMeta"></p>
+      </div>
+
+      <!-- 提醒设置 -->
+      <div class="panel-card">
+        <h3 class="section-title">🔔 提醒设置</h3>
+        <label class="switch-row">
+          <span>
+            <strong>经期提醒</strong>
+            <small>打开应用时，若经期临近则提示</small>
+          </span>
+          <input type="checkbox" id="remindToggle" class="switch">
+        </label>
+        <p class="panel-desc" id="remindStatus"></p>
+      </div>
+
+      <div class="danger-card">
+        <button class="danger-btn" id="clearBtn">清空所有数据</button>
+        <p class="danger-desc">此操作不可撤销，建议先导出备份</p>
       </div>
 
       <p class="privacy-note">🔒 所有数据仅保存在本机浏览器中，不会上传到任何服务器。</p>
@@ -114,6 +163,23 @@
   </nav>
 
 </div>
+
+<!-- 全局提示条 -->
+<div class="toast" id="toast"></div>
+
+<!-- 确认弹窗 -->
+<div class="modal-mask" id="modalMask">
+  <div class="modal">
+    <h3 class="modal-title" id="modalTitle"></h3>
+    <p class="modal-text" id="modalText"></p>
+    <div class="modal-actions">
+      <button class="modal-btn cancel" id="modalCancel">取消</button>
+      <button class="modal-btn confirm" id="modalConfirm">确定</button>
+    </div>
+  </div>
+</div>
+
 <script src="js/app.js"></script>
+<script src="js/features.js"></script>
 </body>
 </html>
