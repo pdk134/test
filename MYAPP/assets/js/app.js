@@ -752,7 +752,17 @@
     for (var i = 0; i < items.length; i++) items[i].classList.toggle('active', items[i] === b);
     $('#quizTerm').classList.toggle('hidden', seg !== 'term');
     $('#quizExam').classList.toggle('hidden', seg !== 'exam');
-    if (seg === 'exam') renderExamStart();
+    // 切换分段时，把另一侧的答题进度重置回起始页，避免残留
+    if (seg === 'term') {
+      $('#examPlay').classList.add('hidden');
+      $('#examResult').classList.add('hidden');
+      $('#examStart').classList.remove('hidden');
+    } else {
+      $('#quizPlay').classList.add('hidden');
+      $('#quizResult').classList.add('hidden');
+      $('#quizStart').classList.remove('hidden');
+      renderExamStart();
+    }
   });
   $('#examYears').addEventListener('click', function (e) {
     var c = e.target.closest('[data-ef]');
@@ -773,6 +783,21 @@
     renderExamStart();
   });
   $('#btnExamReview').addEventListener('click', reviewWrong);
+
+  /* 中途退出（术语自测 / 历年真题） */
+  $('#btnQuizExit').addEventListener('click', function () {
+    if (window.Sfx) Sfx.click();
+    $('#quizPlay').classList.add('hidden');
+    $('#quizResult').classList.add('hidden');
+    $('#quizStart').classList.remove('hidden');
+  });
+  $('#btnExamExit').addEventListener('click', function () {
+    if (window.Sfx) Sfx.click();
+    $('#examPlay').classList.add('hidden');
+    $('#examResult').classList.add('hidden');
+    $('#examStart').classList.remove('hidden');
+    renderExamStart();
+  });
 
   $('#setNew').addEventListener('change', function (e) { Store.data.settings.dailyNew = +e.target.value; Store.touch(); });
   $('#setRev').addEventListener('change', function (e) { Store.data.settings.dailyReview = +e.target.value; Store.touch(); });
