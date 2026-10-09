@@ -201,6 +201,11 @@ button, input, select, .chip, .tab-item, .opt, .lib-item, .tag { touch-action: m
 
 /* ---------------- 进度条 ---------------- */
 .progress-line { display: flex; align-items: center; gap: 12px; }
+.exit-btn {
+  flex: none; border: 1px solid var(--line); background: var(--panel-2); color: var(--text-dim);
+  border-radius: 9px; padding: 5px 10px; font-size: 13px; min-height: 34px;
+}
+.exit-btn:active { transform: scale(.96); }
 .bar { flex: 1; height: 8px; border-radius: 99px; background: var(--panel-2); overflow: hidden; }
 .bar i { display: block; height: 100%; width: 0; border-radius: 99px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .3s; }
 .counter { font-size: 12px; color: var(--text-dim); min-width: 54px; text-align: right; }
@@ -362,6 +367,7 @@ input.switch:checked::after { transform: translateX(20px); }
 .seg {
   display: flex; gap: 0; margin-bottom: 14px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 4px;
+  position: sticky; top: calc(var(--appbar-h) + var(--sat)); z-index: 20;
 }
 .seg-item {
   flex: 1; border: 0; background: transparent; color: var(--text-dim);
