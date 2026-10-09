@@ -65,7 +65,6 @@ function fmtShort(d) {
 /* ---------- 状态与持久化 ---------- */
 const state = {
   periodDays: new Set(),   // Set<'YYYY-MM-DD'> 所有被标记为经期的日期
-  periodEnds: new Set(),   // Set<'YYYY-MM-DD'> 用户明确标记为"经期结束"的日期（只会出现在某段经期的最后一天）
   dailyLogs: {},           // { 'YYYY-MM-DD': { symptoms:[], mood:'', note:'' } }
   viewMonth: today(),      // 日历当前显示的月份
   selectedDate: fmt(today())
@@ -78,37 +77,22 @@ function loadState() {
     if (!raw) return;
     const data = JSON.parse(raw);
     state.periodDays = new Set(data.periodDays || []);
-    state.periodEnds = new Set(data.periodEnds || []);
     state.dailyLogs = data.dailyLogs || {};
-    normalizePeriodEnds();
   } catch (e) {
     console.warn('读取本地数据失败，已重置。', e);
-  }
-}
-
-// 旧数据里可能残留"落在经期段中间"的结束标记，统一校正到所在经期段的最后一天
-function normalizePeriodEnds() {
-  const ends = [...state.periodEnds];
-  state.periodEnds.clear();
-  for (const e of ends) {
-    const p = findPeriodContaining(parseDate(e), getPeriods());
-    if (p) state.periodEnds.add(p.end);
-    else if (state.periodDays.has(e)) state.periodEnds.add(e);
   }
 }
 
 function saveState() {
   const data = {
     periodDays: [...state.periodDays],
-    periodEnds: [...state.periodEnds],
     dailyLogs: state.dailyLogs
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
 /* ---------- 周期计算 ---------- */
-// 把离散的经期日合并为连续的经期段 [{start, end, closed}]
-// closed=true 表示用户已明确标记过这一段的结束日，是"实际经期长度"的可靠样本
+// 把离散的经期日合并为连续的经期段 [{start, end}]
 function getPeriods() {
   const days = [...state.periodDays].sort();
   const periods = [];
@@ -116,81 +100,25 @@ function getPeriods() {
   for (const s of days) {
     if (cur && diffDays(parseDate(cur.end), parseDate(s)) === 1) {
       cur.end = s;
-      cur.closed = state.periodEnds.has(s);
     } else {
-      cur = { start: s, end: s, closed: state.periodEnds.has(s) };
+      cur = { start: s, end: s };
       periods.push(cur);
     }
   }
   return periods;
 }
 
-// 某天落在哪一段经期内（用于校正遗留的结束标记）
-function findPeriodContaining(d, periods) {
-  for (const p of periods) {
-    if (isInRange(d, parseDate(p.start), parseDate(p.end))) return p;
-  }
-  return null;
-}
-
 /**
- * 找到"可以在 date 这一天结束"的那段经期：
- * 即开始日不晚于 date、且间隔在合理经期长度内（避免把上上个月的经期拿来接）。
- */
-function findPeriodForEnd(d, periods) {
-  let target = null;
-  for (const p of periods) {
-    const dist = diffDays(parseDate(p.start), d);
-    if (dist >= 0 && dist <= PERIOD_LEN_MAX - 1) {
-      if (!target || parseDate(p.start) > parseDate(target.start)) target = p;
-    }
-  }
-  return target;
-}
-
-/**
- * 标记"经期在这一天结束"。
- * 经期是连续的，因此会自动补齐 开始日 ~ 这一天 的所有日期；
- * 若之前多标了这一天之后的日期，则视为不属于本次经期并移除，
- * 这样该段就以这一天收尾，后续的虚线预测随即消失。
- */
-function markPeriodEnd(dateStr) {
-  const d = parseDate(dateStr);
-  const target = findPeriodForEnd(d, getPeriods());
-
-  if (target) {
-    const start = parseDate(target.start);
-    for (let cur = new Date(start); cur <= d; cur = addDays(cur, 1)) {
-      state.periodDays.add(fmt(cur));
-      state.periodEnds.delete(fmt(cur));   // 段内旧的结束标记作废
-    }
-    // 结束日之后仍连着被标为经期的日子 -> 用户改口说经期更短，移除它们
-    let cur = addDays(d, 1);
-    while (state.periodDays.has(fmt(cur))) {
-      state.periodDays.delete(fmt(cur));
-      state.periodEnds.delete(fmt(cur));
-      cur = addDays(cur, 1);
-    }
-  } else {
-    // 没有任何可接续的经期，就把这一天当成一次单日经期
-    state.periodDays.add(dateStr);
-  }
-  state.periodEnds.add(dateStr);
-}
-
-/**
- * 计算"延续经期"：对每个只标记了开始日（或还没标到结束日）的经期段，
+ * 计算"延续经期"：对每个只标记了开始日（或未标满）的经期段，
  * 自动向后延伸 avgPeriodLen 天，供日历用虚线预测色展示。
  *
- * 一旦用户把某天点成实心经期，该天即进入 periodDays，该段 end 随之变长；
- * 一旦用户标记了"经期结束"（closed），本段即为真实长度，不再做任何延展。
+ * 一旦用户把某天点成实心经期，该天即进入 periodDays，
+ * 该段 end 随之变长，不再是"待确认"状态。
  */
 function getOngoingPeriods(periods, avgPeriodLen) {
   const result = [];
 
   for (const p of periods) {
-    if (p.closed) continue;   // 已明确结束：以实际长度为准，不再预测延展
-
     const start = parseDate(p.start);
     const end = parseDate(p.end);
     const markedLen = diffDays(start, end) + 1;
@@ -240,25 +168,17 @@ function getAvgCycle(periods) {
  *
  * 关键点：只标了 1 天的经期段往往是"刚开了个头、还没标完"，
  * 若把它当真实长度参与平均，会把预测越算越短（1 天 -> 延续立刻结束）。
- * 因此：
- *  - 用户明确标记过结束日（closed）的段，就是真实经期长度，直接采纳；
- *  - 未标记结束的段，仍要求【标记天数 ≥ PERIOD_LEN_CONFIRMED 天】才算可靠样本。
+ * 因此这里只采纳【标记天数 ≥ PERIOD_LEN_CONFIRMED 天】的经期段来学习，
+ * 未达标的段一律忽略，从而保持稳定的默认长度。
  */
-const PERIOD_LEN_CONFIRMED = 3;  // 未标结束日时，标记达到 3 天才认为是"可靠样本"
-
-// 可用于学习"真实经期长度"的样本：明确标记过结束日的段，或标记天数已达标的段
-function getPeriodLenSamples(periods) {
-  return periods
-    .map(p => ({ len: diffDays(parseDate(p.start), parseDate(p.end)) + 1, closed: !!p.closed }))
-    .filter(x => x.len <= PERIOD_LEN_MAX &&
-                 x.len >= (x.closed ? PERIOD_LEN_MIN : PERIOD_LEN_CONFIRMED))
-    .map(x => x.len);
-}
+const PERIOD_LEN_CONFIRMED = 3;  // 标记达到 3 天才认为是"可靠样本"
 
 function getAvgPeriodLen(periods) {
   if (periods.length === 0) return DEFAULT_PERIOD;
 
-  const lens = getPeriodLenSamples(periods);
+  const lens = periods
+    .map(p => diffDays(parseDate(p.start), parseDate(p.end)) + 1)
+    .filter(len => len >= PERIOD_LEN_CONFIRMED && len <= PERIOD_LEN_MAX);
 
   // 还没有可靠样本时，保持默认长度，不用"只标了 1 天"的段去拉低预测
   if (lens.length === 0) return DEFAULT_PERIOD;
@@ -295,7 +215,6 @@ const els = {
   logDateLabel: $('logDateLabel'),
   logDateSub: $('logDateSub'),
   periodToggle: $('periodToggle'),
-  periodEndToggle: $('periodEndToggle'),
   symptomChips: $('symptomChips'),
   moodRow: $('moodRow'),
   noteInput: $('noteInput'),
@@ -341,8 +260,8 @@ function renderStatus() {
     const dayNum = diffDays(ongoingToday.startDate, t) + 1;
     mainHtml = '经期第 <span class="big-num">' + dayNum + '</span> 天';
     subHtml = '本次经期从 ' + fmtShort(ongoingToday.startDate) + ' 开始，' +
-      '预测至 ' + fmtShort(ongoingToday.endDate) +
-      '；实际哪天结束，到记录页点「经期结束」即可';
+      '已按平均经期长度预测至 ' + fmtShort(ongoingToday.endDate) +
+      '，到记录页点击确认即可';
     tagHtml = '<span class="phase-tag">经期中（预测）</span>';
   } else {
     const cycleDay = diffDays(parseDate(last.start), t) + 1;
@@ -406,8 +325,6 @@ function renderCalendar() {
     if (state.periodDays.has(s)) {
       // 已确认的经期日（实心）
       classes.push('is-period');
-      // 用户明确标记的经期结束日
-      if (state.periodEnds.has(s)) classes.push('is-period-end');
     } else if (findOngoing(d, ongoing)) {
       // 本次经期的延续预测日（虚线待确认）
       classes.push('is-ongoing');
@@ -468,34 +385,14 @@ function renderLog() {
   if (isPeriod) {
     els.periodToggle.textContent = '🩸 已确认：这一天是经期（点击取消）';
   } else if (inOngoing) {
-    els.periodToggle.textContent = '🩸 这一天在预测经期内，点击确认为经期';
+    els.periodToggle.textContent = '🩸 这一天在经期内，点击确认为经期';
   } else {
-    els.periodToggle.textContent = '🩸 标记这一天为经期开始';
-  }
-
-  // 经期结束开关
-  const isEnd = state.periodEnds.has(state.selectedDate);
-  const isFuture = d > today();
-  // 只有"这一天本身在某段经期里 / 紧接在经期开始日之后"才能作为结束日
-  const canEnd = isEnd || (!isFuture && !!findPeriodForEnd(d, periods));
-
-  els.periodEndToggle.classList.toggle('on', isEnd);
-  els.periodEndToggle.disabled = !canEnd;
-  if (isEnd) {
-    els.periodEndToggle.textContent = '✅ 经期在这一天结束（点击取消）';
-  } else if (canEnd) {
-    els.periodEndToggle.textContent = '✅ 标记「经期在这一天结束」';
-  } else if (isFuture) {
-    els.periodEndToggle.textContent = '✅ 经期结束（只能标记今天及以前）';
-  } else {
-    els.periodEndToggle.textContent = '✅ 经期结束（请先标记经期开始日）';
+    els.periodToggle.textContent = '🩸 标记这一天为经期';
   }
 
   // 延续提示
   if (!isPeriod && inOngoing) {
     els.logDateSub.textContent += ' · 预计经期内，待确认';
-  } else if (isEnd) {
-    els.logDateSub.textContent += ' · 经期结束日';
   }
 
   // 症状
@@ -531,6 +428,128 @@ function afterLogChange() {
   showSaved();
 }
 
+/* ---------- 周期规律性分析 ---------- */
+/**
+ * 分析周期是否规律，并在统计页给出提示。
+ *
+ * 判定规则（需至少 3 个及以上周期数据）：
+ *  - 波动 ≤ 5 天   -> 规律，正常展示
+ *  - 波动 6~7 天   -> 略有不规律，蓝色提示
+ *  - 波动 > 7 天   -> 明显不规律，橙色提醒建议关注
+ *  - 周期 < 21 天 或 > 35 天 -> 周期过短/过长，建议咨询医生
+ */
+function analyzeCycle(periods) {
+  if (periods.length < 3) return null;
+
+  const gaps = [];
+  for (let i = 1; i < periods.length; i++) {
+    gaps.push({
+      len: diffDays(parseDate(periods[i - 1].start), parseDate(periods[i].start)),
+      from: periods[i - 1].start,
+      to: periods[i].start
+    });
+  }
+  if (gaps.length < 2) return null;
+
+  // 第一步：剔除"异常短"的经期段（多为误标），避免其把两侧间隔都污染。
+  // 例如：正常每月 1 号记录，中间突然冒出 8/11~8/12，会把 8/1->8/11、8/11->8/29 两条间隔都破坏。
+  // 判定：该段与相邻段的开始日间隔 <15 天（远小于正常周期），且自身标记 <3 天。
+  // 首段与末段不剔除（避免误删正在进行的经期）。
+  const cleanPeriods = periods.filter((p, idx) => {
+    if (idx === 0 || idx === periods.length - 1) return true;
+
+    const myStart = parseDate(p.start);
+    const markedLen = diffDays(parseDate(p.start), parseDate(p.end)) + 1;
+
+    // 与前一段间隔过短 -> 可疑
+    const gapToPrev = diffDays(parseDate(periods[idx - 1].start), myStart);
+    // 与后一段间隔过短 -> 可疑
+    const gapToNext = diffDays(myStart, parseDate(periods[idx + 1].start));
+
+    const suspicious = gapToPrev < 15 || gapToNext < 15;
+    const shortMarked = markedLen < 3;
+    return !(suspicious && shortMarked);
+  });
+
+  if (cleanPeriods.length < 3) return null;
+
+  const baseGaps = [];
+  for (let i = 1; i < cleanPeriods.length; i++) {
+    baseGaps.push({
+      len: diffDays(parseDate(cleanPeriods[i - 1].start), parseDate(cleanPeriods[i].start)),
+      from: cleanPeriods[i - 1].start,
+      to: cleanPeriods[i].start
+    });
+  }
+
+  // 第二步：保留 15~60 天的合理周期值（兜底过滤极端数据）
+  const valid = baseGaps.filter(g => g.len >= 15 && g.len <= 60);
+  if (valid.length < 2) return null;
+
+  const lens = valid.map(g => g.len);
+  const avg = lens.reduce((a, b) => a + b, 0) / lens.length;
+  const max = Math.max(...lens);
+  const min = Math.min(...lens);
+  const spread = max - min;   // 极差，衡量波动幅度
+
+  // 标准差
+  const variance = lens.reduce((s, l) => s + (l - avg) * (l - avg), 0) / lens.length;
+  const sd = Math.sqrt(variance);
+
+  let level, title, desc;
+
+  if (avg < 21) {
+    level = 'warn';
+    title = '周期偏短';
+    desc = '你最近的平均周期为 ' + Math.round(avg) + ' 天，短于常见的 21 天。' +
+      '若持续如此，建议咨询医生了解原因。';
+  } else if (avg > 35) {
+    level = 'warn';
+    title = '周期偏长';
+    desc = '你最近的平均周期为 ' + Math.round(avg) + ' 天，长于常见的 35 天。' +
+      '若持续如此，建议咨询医生了解原因。';
+  } else if (spread > 7) {
+    level = 'warn';
+    title = '周期波动较大';
+    desc = '最近 ' + lens.length + ' 个周期在 ' + min + '~' + max + ' 天之间波动，' +
+      '相差 ' + spread + ' 天（标准差 ' + sd.toFixed(1) + '）。' +
+      '偶尔波动是正常的，若连续多个周期如此，建议留意作息与压力，必要时咨询医生。';
+  } else if (spread > 5) {
+    level = 'info';
+    title = '周期略有不规律';
+    desc = '最近 ' + lens.length + ' 个周期在 ' + min + '~' + max + ' 天之间，' +
+      '波动 ' + spread + ' 天，属于正常范围内的轻微波动（标准差 ' + sd.toFixed(1) + '）。';
+  } else {
+    level = 'ok';
+    title = '周期规律';
+    desc = '最近 ' + lens.length + ' 个周期的波动仅 ' + spread + ' 天' +
+      '（' + min + '~' + max + ' 天，标准差 ' + sd.toFixed(1) + '），非常规律，保持好状态 👍';
+  }
+
+  return { level, title, desc, avg: Math.round(avg), spread, sd, min, max, count: lens.length };
+}
+
+function renderCycleAlert(periods) {
+  const area = $('alertArea');
+  if (!area) return;
+
+  const res = analyzeCycle(periods);
+  if (!res) {
+    area.innerHTML = '';
+    return;
+  }
+
+  const icons = { ok: '✅', info: 'ℹ️', warn: '⚠️' };
+  area.innerHTML =
+    '<div class="alert-card ' + res.level + '">' +
+      '<div class="alert-head">' +
+        '<span class="alert-icon">' + icons[res.level] + '</span>' +
+        '<span class="alert-title">' + res.title + '</span>' +
+      '</div>' +
+      '<p class="alert-desc">' + res.desc + '</p>' +
+    '</div>';
+}
+
 /* ---------- 渲染：统计页 ---------- */
 function renderStats() {
   const periods = getPeriods();
@@ -538,9 +557,11 @@ function renderStats() {
   const avgPeriodLen = getAvgPeriodLen(periods);
 
   els.statAvgCycle.textContent = periods.length >= 2 ? avgCycle : '--';
-  // 只有拿到真实经期长度样本（标记过结束日 / 标满 3 天 以上）才展示，否则显示 --
-  els.statAvgPeriod.textContent = getPeriodLenSamples(periods).length > 0 ? avgPeriodLen : '--';
+  els.statAvgPeriod.textContent = periods.length >= 1 ? avgPeriodLen : '--';
   els.statCount.textContent = periods.length;
+
+  // 周期规律性分析提醒
+  renderCycleAlert(periods);
 
   // 下次经期预测卡
   const pred = getPrediction(periods);
@@ -550,15 +571,10 @@ function renderStats() {
     if (untilNext > 0) countText = '约 ' + untilNext + ' 天后';
     else if (untilNext === 0) countText = '预计就是今天';
     else countText = '已推迟约 ' + (-untilNext) + ' 天';
-
-    // 经期长度的依据：有真实结束记录则按实际，否则是默认值
-    const samples = getPeriodLenSamples(periods).length;
-    const lenBasis = samples > 0 ? '（依据 ' + samples + ' 次实际经期）' : '（默认长度）';
-
     els.nextCard.innerHTML =
       '<div class="next-title">🔮 下次经期预测</div>' +
       '<div class="next-date">' + fmtCN(pred.nextStart) + '</div>' +
-      '<div class="next-sub">' + countText + ' · 预计持续 ' + pred.avgPeriodLen + ' 天' + lenBasis + ' · ' +
+      '<div class="next-sub">' + countText + ' · 预计持续 ' + pred.avgPeriodLen + ' 天 · ' +
       '排卵日约 ' + fmtShort(pred.ovulation) + '</div>';
   } else {
     els.nextCard.innerHTML =
@@ -608,7 +624,7 @@ function renderStats() {
         lenText = '已标 ' + markedLen + ' 天 · 预计 ' + (diffDays(ong.startDate, ong.endDate) + 1) + ' 天';
       } else {
         endText = fmtShort(parseDate(p.end));
-        lenText = '持续 ' + markedLen + ' 天' + (p.closed ? ' · 已结束 ✓' : '');
+        lenText = '持续 ' + markedLen + ' 天';
       }
 
       let cycleText = '';
@@ -682,21 +698,8 @@ function bindEvents() {
   els.periodToggle.addEventListener('click', () => {
     if (state.periodDays.has(state.selectedDate)) {
       state.periodDays.delete(state.selectedDate);
-      state.periodEnds.delete(state.selectedDate);
     } else {
       state.periodDays.add(state.selectedDate);
-    }
-    renderLog();
-    afterLogChange();
-  });
-
-  // 记录页：经期结束开关
-  els.periodEndToggle.addEventListener('click', () => {
-    const s = state.selectedDate;
-    if (state.periodEnds.has(s)) {
-      state.periodEnds.delete(s);        // 取消结束标记，恢复预测延展
-    } else {
-      markPeriodEnd(s);                  // 以这一天收尾，并记录真实经期长度
     }
     renderLog();
     afterLogChange();
@@ -737,3 +740,41 @@ function bindEvents() {
 loadState();
 bindEvents();
 renderAll();
+
+/* ---------- 对外接口（供 features.js 复用核心逻辑） ---------- */
+window.PT = {
+  // 状态
+  state,
+  saveState,
+  loadState,
+  afterLogChange,
+  renderAll,
+  STORAGE_KEY,
+
+  // 计算
+  getPeriods,
+  getOngoingPeriods,
+  getAvgCycle,
+  getAvgPeriodLen,
+  getPrediction,
+  findOngoing,
+  isInRange,
+
+  // 日期工具
+  fmt,
+  parseDate,
+  addDays,
+  diffDays,
+  today,
+  fmtCN,
+  fmtShort,
+
+  // 常量
+  DEFAULT_CYCLE,
+  DEFAULT_PERIOD,
+
+  // DOM 助手
+  $,
+  els
+};
+
