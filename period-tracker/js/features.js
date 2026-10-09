@@ -132,10 +132,12 @@
       summary: {
         periodCount: periods.length,
         markedDays: state.periodDays.size,
+        closedCount: state.closedPeriods.size,
         logDays: Object.keys(state.dailyLogs).length
       },
       data: {
         periodDays: [...state.periodDays],
+        closedPeriods: [...state.closedPeriods],
         dailyLogs: state.dailyLogs,
         settings: { theme: settings.theme, remind: settings.remind }
       }
@@ -179,12 +181,14 @@
     }
 
     // 兼容两种结构：带 data 包装的，或直接的裸数据
-    let periodDays, dailyLogs;
+    let periodDays, dailyLogs, closedPeriods;
     if (obj && obj.data && (obj.data.periodDays || obj.data.dailyLogs)) {
       periodDays = obj.data.periodDays || [];
+      closedPeriods = obj.data.closedPeriods || [];
       dailyLogs = obj.data.dailyLogs || {};
     } else if (obj && (obj.periodDays || obj.dailyLogs)) {
       periodDays = obj.periodDays || [];
+      closedPeriods = obj.closedPeriods || [];
       dailyLogs = obj.dailyLogs || {};
     } else {
       return { ok: false, error: '文件中没有找到经期数据，请确认选择了正确的备份文件' };
@@ -201,7 +205,7 @@
       console.warn('已过滤 ' + (periodDays.length - validDays.length) + ' 条非法日期');
     }
 
-    return { ok: true, periodDays: validDays, dailyLogs: dailyLogs, meta: obj };
+    return { ok: true, periodDays: validDays, closedPeriods: closedPeriods, dailyLogs: dailyLogs, meta: obj };
   }
 
   function importData() {
@@ -251,6 +255,7 @@
 
     if (mode === 'merge') {
       res.periodDays.forEach(d => state.periodDays.add(d));
+      if (res.closedPeriods) res.closedPeriods.forEach(d => state.closedPeriods.add(d));
       Object.keys(res.dailyLogs || {}).forEach(k => {
         const inc = res.dailyLogs[k];
         const cur = state.dailyLogs[k];
@@ -268,6 +273,7 @@
       });
     } else {
       state.periodDays = new Set(res.periodDays);
+      state.closedPeriods = new Set(res.closedPeriods || []);
       state.dailyLogs = res.dailyLogs || {};
     }
 
@@ -304,6 +310,9 @@
 
     let text = '共 ' + periods.length + ' 次经期 · ' + state.periodDays.size +
       ' 天经期 · ' + logDays + ' 天日记';
+    if (state.closedPeriods.size > 0) {
+      text += ' · ' + state.closedPeriods.size + ' 次已结束';
+    }
     if (first && last) {
       text += '（' + fmtCN(first) + ' 起）';
     }

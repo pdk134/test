@@ -64,19 +64,21 @@ function fmtShort(d) {
 
 /* ---------- 状态与持久化 ---------- */
 const state = {
-  periodDays: new Set(),   // Set<'YYYY-MM-DD'> 所有被标记为经期的日期
-  dailyLogs: {},           // { 'YYYY-MM-DD': { symptoms:[], mood:'', note:'' } }
-  viewMonth: today(),      // 日历当前显示的月份
+  periodDays: new Set(),     // Set<'YYYY-MM-DD'> 所有被标记为经期的日期
+  closedPeriods: new Set(), // Set<'YYYY-MM-DD'> 已被用户明确结束的经期开始日
+  dailyLogs: {},             // { 'YYYY-MM-DD': { symptoms:[], mood:'', note:'' } }
+  viewMonth: today(),        // 日历当前显示的月份
   selectedDate: fmt(today())
 };
 
 function loadState() {
   try {
-    // 兼容旧版本（v1）的数据，避免升级后现有记录丢失
+    // 兼容旧版本（v1/v2）的数据，避免升级后现有记录丢失
     const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('periodTracker.v1');
     if (!raw) return;
     const data = JSON.parse(raw);
     state.periodDays = new Set(data.periodDays || []);
+    state.closedPeriods = new Set(data.closedPeriods || []);
     state.dailyLogs = data.dailyLogs || {};
   } catch (e) {
     console.warn('读取本地数据失败，已重置。', e);
@@ -86,6 +88,7 @@ function loadState() {
 function saveState() {
   const data = {
     periodDays: [...state.periodDays],
+    closedPeriods: [...state.closedPeriods],
     dailyLogs: state.dailyLogs
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -119,6 +122,9 @@ function getOngoingPeriods(periods, avgPeriodLen) {
   const result = [];
 
   for (const p of periods) {
+    // 用户已明确结束这段经期，不再延续预测
+    if (state.closedPeriods.has(p.start)) continue;
+
     const start = parseDate(p.start);
     const end = parseDate(p.end);
     const markedLen = diffDays(start, end) + 1;
@@ -141,6 +147,19 @@ function getOngoingPeriods(periods, avgPeriodLen) {
     });
   }
   return result;
+}
+
+// 找到某天所属的经期段（含已结束与延续中的）
+function findPeriodOf(dateStr, periods, ongoing) {
+  const d = parseDate(dateStr);
+  // 先看是否落在已确认的经期日
+  for (const p of periods) {
+    if (d >= parseDate(p.start) && d <= parseDate(p.end)) return p;
+  }
+  // 再看是否在延续预测区间内
+  const o = findOngoing(d, ongoing);
+  if (o) return { start: o.start, end: fmt(o.endDate), predicted: true };
+  return null;
 }
 
 // 某天是否落在"延续预测"区间内
@@ -215,6 +234,7 @@ const els = {
   logDateLabel: $('logDateLabel'),
   logDateSub: $('logDateSub'),
   periodToggle: $('periodToggle'),
+  periodEndBtn: $('periodEndBtn'),
   symptomChips: $('symptomChips'),
   moodRow: $('moodRow'),
   noteInput: $('noteInput'),
@@ -374,12 +394,16 @@ function renderLog() {
     els.logDateSub.textContent = diff < 0 ? (-diff + ' 天前') : (diff + ' 天后');
   }
 
-  // 经期开关
+  // 经期开关 + 结束按钮
   const isPeriod = state.periodDays.has(state.selectedDate);
   const periods = getPeriods();
   const pred = getPrediction(periods);
   const ongoing = getOngoingPeriods(periods, pred ? pred.avgPeriodLen : DEFAULT_PERIOD);
   const inOngoing = !isPeriod && findOngoing(d, ongoing);
+
+  // 找到当前日期所属的经期段
+  const curPeriod = findPeriodOf(state.selectedDate, periods, ongoing);
+  const isClosed = curPeriod && state.closedPeriods.has(curPeriod.start);
 
   els.periodToggle.classList.toggle('on', isPeriod);
   if (isPeriod) {
@@ -390,8 +414,24 @@ function renderLog() {
     els.periodToggle.textContent = '🩸 标记这一天为经期';
   }
 
+  // 经期结束按钮
+  if (curPeriod && !isClosed) {
+    // 该天处于经期中或延续预测内，且该段尚未结束 -> 显示"经期到此结束"
+    els.periodEndBtn.hidden = false;
+    els.periodEndBtn.className = 'period-end-btn';
+    els.periodEndBtn.textContent = '🛑 经期到此结束（' + fmtShort(d) + '）';
+  } else if (curPeriod && isClosed) {
+    // 该段已被结束 -> 显示"恢复延续预测"
+    els.periodEndBtn.hidden = false;
+    els.periodEndBtn.className = 'period-end-btn closed';
+    const closedEnd = parseDate(curPeriod.end);
+    els.periodEndBtn.textContent = '✅ 经期已结束于 ' + fmtShort(closedEnd) + '（点击恢复延续预测）';
+  } else {
+    els.periodEndBtn.hidden = true;
+  }
+
   // 延续提示
-  if (!isPeriod && inOngoing) {
+  if (!isPeriod && inOngoing && !isClosed) {
     els.logDateSub.textContent += ' · 预计经期内，待确认';
   }
 
@@ -698,8 +738,39 @@ function bindEvents() {
   els.periodToggle.addEventListener('click', () => {
     if (state.periodDays.has(state.selectedDate)) {
       state.periodDays.delete(state.selectedDate);
+      // 取消经期日的同时，若该段曾被结束，也一并恢复（避免数据不一致）
+      const periods = getPeriods();
+      const ongoing = getOngoingPeriods(periods, getAvgPeriodLen(periods));
+      const cur = findPeriodOf(state.selectedDate, periods, ongoing);
+      if (cur && state.closedPeriods.has(cur.start)) {
+        state.closedPeriods.delete(cur.start);
+      }
     } else {
       state.periodDays.add(state.selectedDate);
+    }
+    renderLog();
+    afterLogChange();
+  });
+
+  // 记录页：经期结束 / 恢复延续
+  els.periodEndBtn.addEventListener('click', () => {
+    const periods = getPeriods();
+    const ongoing = getOngoingPeriods(periods, getAvgPeriodLen(periods));
+    const cur = findPeriodOf(state.selectedDate, periods, ongoing);
+    if (!cur) return;
+
+    if (state.closedPeriods.has(cur.start)) {
+      // 已结束 -> 恢复延续预测
+      state.closedPeriods.delete(cur.start);
+    } else {
+      // 未结束 -> 把开始日到选中日之间所有日子都标记为经期（保证合并成一段），
+      // 再关闭该段，使后续日期的虚线延续消失
+      const startD = parseDate(cur.start);
+      const endD = parseDate(state.selectedDate);
+      for (let d = startD; d <= endD; d = addDays(d, 1)) {
+        state.periodDays.add(fmt(d));
+      }
+      state.closedPeriods.add(cur.start);
     }
     renderLog();
     afterLogChange();
