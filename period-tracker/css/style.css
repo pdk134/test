@@ -296,6 +296,27 @@ body {
   color: #fff;
 }
 
+/* 经期结束按钮 */
+.period-end-btn {
+  width: 100%;
+  padding: 11px;
+  border-radius: 12px;
+  border: 1.5px solid var(--info-text);
+  background: var(--info-bg);
+  color: var(--info-text);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s;
+  margin-bottom: 10px;
+}
+.period-end-btn:active { transform: scale(0.98); opacity: 0.85; }
+.period-end-btn.closed {
+  border-color: var(--ok-text);
+  background: var(--ok-bg);
+  color: var(--ok-text);
+}
+
 .section-title {
   font-size: 0.95rem;
   margin: 16px 0 10px;
