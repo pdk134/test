@@ -110,6 +110,8 @@ button, input, select, .chip, .tab-item, .opt, .lib-item, .tag { touch-action: m
 }
 .appbar-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .appbar-right { display: flex; align-items: center; gap: 8px; flex: none; }
+.exam-badge { font-size: 11px; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
+.exam-badge b { color: var(--accent-2); }
 
 .logo {
   width: 34px; height: 34px; border-radius: 10px; flex: none;
