@@ -571,3 +571,30 @@ input.switch:checked::after { transform: translateX(20px); }
 .pc-d { font-size: 13.5px; line-height: 1.85; color: var(--text-dim); }
 .pc-master { margin-top: 10px; }
 .point-card.mastered .pc-master { color: var(--good); border-color: var(--good); }
+
+/* ===== 全真模拟考试 ===== */
+.mock-entry { border-color: var(--accent); background: rgba(94,129,244,.08); }
+.mock-btns { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.mock-timer { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; margin: 0 0 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; }
+.mock-clock { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent); }
+.mock-label { font-size: 13px; color: var(--text-dim); flex: 1; }
+.mock-timer .btn { padding: 7px 14px; }
+.essay-area { width: 100%; min-height: 320px; resize: vertical; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--panel); color: var(--text); padding: 12px 14px; font-size: 15px; line-height: 1.9; font-family: inherit; }
+.essay-count { font-size: 13px; color: var(--text-dim); margin: 8px 0 4px; text-align: right; }
+.essay-count b { color: var(--accent); }
+.case-meta { font-size: 12.5px; color: var(--text-dim); margin-bottom: 6px; }
+.wrong-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.wrong-row:last-child { border-bottom: none; }
+.wrong-row span { flex: 1; font-size: 14px; }
+.wrong-row b { font-size: 16px; color: var(--accent); font-variant-numeric: tabular-nums; }
+.wrong-row .btn { padding: 6px 14px; }
+
+/* ===== 版本更新提示条 ===== */
+.update-bar { position: fixed; left: 12px; right: 12px; bottom: 76px; z-index: 60;
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  background: var(--panel-2); border: 1px solid var(--accent); border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+.update-bar p { flex: 1; font-size: 13px; margin: 0; }
+.update-bar .btn { padding: 6px 14px; }
+.update-bar .x { background: none; border: none; color: var(--text-dim); font-size: 18px; padding: 0 4px; }
