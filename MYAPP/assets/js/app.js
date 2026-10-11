@@ -59,12 +59,8 @@
     if (name === 'library') ensureTerms().then(renderLibrary);
     if (name === 'stats') ensureTerms().then(renderStats);
     if (name === 'account') renderAccount();
-<<<<<<< HEAD
-    if (name === 'points') renderPoints();
-=======
     if (name === 'points') ensurePoints().then(renderPoints);
     if (name === 'quiz') ensureTerms(); // 术语自测默认分段依赖词库
->>>>>>> 73d60224252bf060c68e88717ab5268f86831943
     window.scrollTo(0, 0);
   }
 
@@ -555,6 +551,14 @@
     var pool;
     if (withIds) {
       pool = EXAM_ALL.filter(function (q) { return examStore.data.wrong[q.id]; });
+      if (pool.length < 20) {
+        var extra = EXAM_ALL.filter(function (q) { return !examStore.data.wrong[q.id]; });
+        for (var i = extra.length - 1; i > 0; i--) {
+          var j = Math.floor(Math.random() * (i + 1));
+          var t = extra[i]; extra[i] = extra[j]; extra[j] = t;
+        }
+        pool = pool.concat(extra.slice(0, 20 - pool.length));
+      }
     } else {
       pool = exam.filter === 'all' ? EXAM_ALL.slice()
         : EXAM_ALL.filter(function (q) { return q.y + q.s === exam.filter; });
@@ -829,16 +833,10 @@
     if (seg !== 'term') { $('#quizPlay').classList.add('hidden'); $('#quizResult').classList.add('hidden'); $('#quizStart').classList.remove('hidden'); }
     if (seg !== 'exam') { $('#examPlay').classList.add('hidden'); $('#examResult').classList.add('hidden'); $('#examStart').classList.remove('hidden'); }
     if (seg !== 'case') { $('#casePlay').classList.add('hidden'); $('#caseStart').classList.remove('hidden'); }
-<<<<<<< HEAD
-    if (seg === 'exam') renderExamStart();
-    if (seg === 'case') renderCaseStart();
-    if (seg === 'essay') { renderEssayTpl(); renderEssayList(); }
-=======
     if (seg === 'exam') ensureExam().then(renderExamStart);
     if (seg === 'case') ensureCase().then(renderCaseStart);
     if (seg === 'essay') ensureEssay().then(function () { renderEssayTpl(); renderEssayList(); });
     if (seg === 'term') ensureTerms();
->>>>>>> 73d60224252bf060c68e88717ab5268f86831943
   });
   $('#examYears').addEventListener('click', function (e) {
     var c = e.target.closest('[data-ef]');
@@ -893,13 +891,6 @@
       var n = CASE_ALL.filter(function (c) { return c.y + c.s === s.key; }).length;
       chips += '<button class="chip' + (f === s.key ? ' on' : '') + '" data-cf="' + s.key + '">' + s.y + ' ' + s.s + ' · ' + n + '</button>';
     });
-<<<<<<< HEAD
-    $('#caseYears').innerHTML = chips;
-  }
-  function startCase() {
-    caseState.pool = caseState.filter === 'all' ? CASE_ALL.slice()
-      : CASE_ALL.filter(function (c) { return c.y + c.s === caseState.filter; });
-=======
     var wc = wrongExtra.count('case');
     if (wc > 0) chips += '<button class="chip' + (f === '__wrong' ? ' on' : '') + '" data-cf="__wrong">待巩固 ' + wc + '</button>';
     $('#caseYears').innerHTML = chips;
@@ -908,7 +899,6 @@
     if (caseState.filter === '__wrong') caseState.pool = CASE_ALL.filter(function (c) { return wrongExtra.has('case', c.id); });
     else if (caseState.filter === 'all') caseState.pool = CASE_ALL.slice();
     else caseState.pool = CASE_ALL.filter(function (c) { return c.y + c.s === caseState.filter; });
->>>>>>> 73d60224252bf060c68e88717ab5268f86831943
     if (!caseState.pool.length) { toast('该场次暂无案例'); return; }
     caseState.i = 0;
     $('#caseStart').classList.add('hidden');
@@ -933,10 +923,7 @@
         + '<button class="btn ghost case-reveal" data-ci="' + idx + '">显示参考答案</button>'
         + '<div class="case-a hidden" id="caseA' + idx + '">' + (q.a || '').replace(/</g, '&lt;') + '</div></div>';
     });
-<<<<<<< HEAD
-=======
     html += '<button class="btn ghost case-mark" data-cmark="' + c.id + '">' + (wrongExtra.has('case', c.id) ? '已标记待巩固 ✓' : '标记待巩固') + '</button>';
->>>>>>> 73d60224252bf060c68e88717ab5268f86831943
     html += '<button class="btn primary block" id="btnCaseNext">下一题</button>';
     $('#caseBody').innerHTML = html;
   }
@@ -962,8 +949,6 @@
       if (a) { a.classList.toggle('hidden'); rev.textContent = a.classList.contains('hidden') ? '显示参考答案' : '隐藏参考答案'; }
       return;
     }
-<<<<<<< HEAD
-=======
     var mk = e.target.closest('.case-mark');
     if (mk) {
       var cid = mk.getAttribute('data-cmark');
@@ -972,7 +957,6 @@
       toast(wrongExtra.has('case', cid) ? '已加入待巩固' : '已取消标记');
       return;
     }
->>>>>>> 73d60224252bf060c68e88717ab5268f86831943
     if (e.target.closest('#btnCaseNext')) { caseState.i++; renderCaseQ(); }
   });
 
@@ -995,26 +979,18 @@
   }
   function renderEssayList() {
     var f = essayState.filter;
-<<<<<<< HEAD
-    var list = f === 'all' ? ESSAY_ALL.slice()
-      : ESSAY_ALL.filter(function (e) { return e.y + e.s === f; });
-=======
     var list;
     if (f === '__wrong') list = ESSAY_ALL.filter(function (e) { return wrongExtra.has('essay', e.id); });
     else if (f === 'all') list = ESSAY_ALL.slice();
     else list = ESSAY_ALL.filter(function (e) { return e.y + e.s === f; });
->>>>>>> 73d60224252bf060c68e88717ab5268f86831943
     list.sort(function (a, b) { return b.y - a.y || (b.s === '下半年' ? 1 : 0) - (a.s === '下半年' ? 1 : 0) || a.no - b.no; });
     var chips = '<button class="chip' + (f === 'all' ? ' on' : '') + '" data-ef2="all">全部 ' + ESSAY_ALL.length + ' 题</button>';
     essaySessions().forEach(function (s) {
       var n = ESSAY_ALL.filter(function (e) { return e.y + e.s === s.key; }).length;
       chips += '<button class="chip' + (f === s.key ? ' on' : '') + '" data-ef2="' + s.key + '">' + s.y + ' ' + s.s + ' · ' + n + '</button>';
     });
-<<<<<<< HEAD
-=======
     var we = wrongExtra.count('essay');
     if (we > 0) chips += '<button class="chip' + (f === '__wrong' ? ' on' : '') + '" data-ef2="__wrong">待巩固 ' + we + '</button>';
->>>>>>> 73d60224252bf060c68e88717ab5268f86831943
     $('#essayYears').innerHTML = chips;
     var html = '';
     list.forEach(function (e) {
@@ -1022,12 +998,8 @@
         + '<div class="ec-head"><span class="tag">' + e.y + ' ' + e.s + '</span><span class="tag lv">第 ' + e.no + ' 题</span></div>'
         + '<div class="ec-topic">' + e.topic + '</div>'
         + '<div class="ec-tips hidden">' + (e.tips || '').replace(/</g, '&lt;') + '</div>'
-<<<<<<< HEAD
-        + '<button class="btn ghost ec-toggle">查看写作要点</button></div>';
-=======
         + '<button class="btn ghost ec-toggle">查看写作要点</button>'
         + '<button class="btn ghost ec-mark" data-emark="' + e.id + '">' + (wrongExtra.has('essay', e.id) ? '已标记待巩固 ✓' : '标记待巩固') + '</button></div>';
->>>>>>> 73d60224252bf060c68e88717ab5268f86831943
     });
     $('#essayList').innerHTML = html;
   }
@@ -1040,10 +1012,6 @@
     var tips = card.querySelector('.ec-tips');
     var btn = card.querySelector('.ec-toggle');
     if (tips) { tips.classList.toggle('hidden'); if (btn) btn.textContent = tips.classList.contains('hidden') ? '查看写作要点' : '隐藏写作要点'; }
-<<<<<<< HEAD
-  });
-
-=======
     var mk = e.target.closest('.ec-mark');
     if (mk) {
       var eid = mk.getAttribute('data-emark');
@@ -1082,11 +1050,17 @@
     for (var i = 0; i < items.length; i++) items[i].classList.toggle('active', items[i].getAttribute('data-seg') === 'term');
     $('#quizTerm').classList.remove('hidden');
   }
+  function startSprint() {
+    toast('已按错题本智能组卷（薄弱点优先）');
+    switchView('quiz');
+    $('#mockEntry').classList.add('hidden');
+    ensureExam().then(function () { showQuizPanel('exam'); startExam(true); });
+  }
   $('#mockEntry').addEventListener('click', function (e) {
     var b = e.target.closest('[data-mock]'); if (!b) return;
     if (window.Sfx) Sfx.click();
     var k = b.getAttribute('data-mock');
-    if (k === 'exam') startMockExam(); else if (k === 'case') startMockCase(); else if (k === 'essay') startMockEssay();
+    if (k === 'exam') startMockExam(); else if (k === 'case') startMockCase(); else if (k === 'essay') startMockEssay(); else if (k === 'sprint') startSprint();
   });
   $('#btnMockQuit').addEventListener('click', function () { mockExit(); toast('已退出模考'); });
   $('#btnMockSubmit').addEventListener('click', function () { if (mockState.onExpire) { var fn = mockState.onExpire; mockState.onExpire = null; fn(); } });
@@ -1206,7 +1180,6 @@
     });
   }
 
->>>>>>> 73d60224252bf060c68e88717ab5268f86831943
   /* ================= 教材考点（第二版） ================= */
   var POINTS = (window.TEXTBOOK_POINTS || []).slice();
   var ptState = { filter: 'all' };
@@ -1237,10 +1210,7 @@
         html += '<div class="point-card' + (on ? ' mastered' : '') + '" data-pid="' + id + '">'
           + '<div class="pc-head"><span class="pc-t">' + p.t.replace(/</g, '&lt;') + '</span><span class="pc-tag tag lv">难度 ' + p.tag + '</span></div>'
           + '<div class="pc-d">' + p.d.replace(/</g, '&lt;') + '</div>'
-<<<<<<< HEAD
-=======
           + (p.rel && p.rel.length ? '<button class="btn ghost pc-rel" data-rel="' + p.rel.join(',') + '">相关真题 ' + p.rel.length + '</button>' : '')
->>>>>>> 73d60224252bf060c68e88717ab5268f86831943
           + '<button class="btn ghost pc-master">' + (on ? '已掌握 ✓' : '标记掌握') + '</button></div>';
       });
       html += '</div>';
@@ -1254,11 +1224,8 @@
     ptState.filter = c.getAttribute('data-pf'); renderPoints();
   });
   $('#ptList').addEventListener('click', function (e) {
-<<<<<<< HEAD
-=======
     var rel = e.target.closest('.pc-rel');
     if (rel) { openRelQuestions(rel.getAttribute('data-rel')); return; }
->>>>>>> 73d60224252bf060c68e88717ab5268f86831943
     var card = e.target.closest('.point-card'); if (!card) return;
     var id = card.getAttribute('data-pid');
     var on = !ptStore.has(id);
@@ -1268,8 +1235,6 @@
     if (btn) btn.textContent = on ? '已掌握 ✓' : '标记掌握';
     $('#ptMastered').textContent = ptStore.count();
   });
-<<<<<<< HEAD
-=======
   function openRelQuestions(csv) {
     var ids = (csv || '').split(',').filter(Boolean);
     ensureExam().then(function () {
@@ -1296,7 +1261,6 @@
       });
     });
   }
->>>>>>> 73d60224252bf060c68e88717ab5268f86831943
 
   $('#setNew').addEventListener('change', function (e) { Store.data.settings.dailyNew = +e.target.value; Store.touch(); });
   $('#setRev').addEventListener('change', function (e) { Store.data.settings.dailyReview = +e.target.value; Store.touch(); });
@@ -1405,12 +1369,22 @@
     else if (e.key === 'b' || e.key === 'B') setBgm(!Store.data.settings.bgm, true);
   });
 
+  function updateCountdown() {
+    var el = $('#examCountdown'); if (!el) return;
+    var target = new Date(2026, 9, 24, 9, 0, 0); // 10/24 软考开考日
+    var days = Math.ceil((target - new Date()) / 86400000);
+    if (days > 0) el.innerHTML = '📅 距软考 10/24 还有 <b>' + days + '</b> 天';
+    else if (days === 0) el.innerHTML = '🔥 今天考试！';
+    else el.innerHTML = '✅ 考试已结束';
+  }
+
   /* ---------------- 启动 ---------------- */
   lastDataRef = Store.data;
   Sync.onChange(afterCloudChange);
   applySettings();
   if (Store.data.settings.bgm && window.Bgm) Bgm.startWhenAllowed(); // 等首次点击/按键后才真正出声
   updateSide();
+  updateCountdown();
   // 词库数据按需加载，加载完成后再做依赖它的首屏渲染
   ensureTerms().then(function () {
     renderLibrary();

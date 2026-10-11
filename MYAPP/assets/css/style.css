@@ -110,6 +110,8 @@ button, input, select, .chip, .tab-item, .opt, .lib-item, .tag { touch-action: m
 }
 .appbar-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .appbar-right { display: flex; align-items: center; gap: 8px; flex: none; }
+.exam-badge { font-size: 11px; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
+.exam-badge b { color: var(--accent-2); }
 
 .logo {
   width: 34px; height: 34px; border-radius: 10px; flex: none;
@@ -571,8 +573,6 @@ input.switch:checked::after { transform: translateX(20px); }
 .pc-d { font-size: 13.5px; line-height: 1.85; color: var(--text-dim); }
 .pc-master { margin-top: 10px; }
 .point-card.mastered .pc-master { color: var(--good); border-color: var(--good); }
-<<<<<<< HEAD
-=======
 
 /* ===== 全真模拟考试 ===== */
 .mock-entry { border-color: var(--accent); background: rgba(94,129,244,.08); }
@@ -600,4 +600,3 @@ input.switch:checked::after { transform: translateX(20px); }
 .update-bar p { flex: 1; font-size: 13px; margin: 0; }
 .update-bar .btn { padding: 6px 14px; }
 .update-bar .x { background: none; border: none; color: var(--text-dim); font-size: 18px; padding: 0 4px; }
->>>>>>> 73d60224252bf060c68e88717ab5268f86831943
