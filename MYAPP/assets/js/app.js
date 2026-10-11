@@ -551,14 +551,6 @@
     var pool;
     if (withIds) {
       pool = EXAM_ALL.filter(function (q) { return examStore.data.wrong[q.id]; });
-      if (pool.length < 20) {
-        var extra = EXAM_ALL.filter(function (q) { return !examStore.data.wrong[q.id]; });
-        for (var i = extra.length - 1; i > 0; i--) {
-          var j = Math.floor(Math.random() * (i + 1));
-          var t = extra[i]; extra[i] = extra[j]; extra[j] = t;
-        }
-        pool = pool.concat(extra.slice(0, 20 - pool.length));
-      }
     } else {
       pool = exam.filter === 'all' ? EXAM_ALL.slice()
         : EXAM_ALL.filter(function (q) { return q.y + q.s === exam.filter; });
@@ -1050,17 +1042,11 @@
     for (var i = 0; i < items.length; i++) items[i].classList.toggle('active', items[i].getAttribute('data-seg') === 'term');
     $('#quizTerm').classList.remove('hidden');
   }
-  function startSprint() {
-    toast('已按错题本智能组卷（薄弱点优先）');
-    switchView('quiz');
-    $('#mockEntry').classList.add('hidden');
-    ensureExam().then(function () { showQuizPanel('exam'); startExam(true); });
-  }
   $('#mockEntry').addEventListener('click', function (e) {
     var b = e.target.closest('[data-mock]'); if (!b) return;
     if (window.Sfx) Sfx.click();
     var k = b.getAttribute('data-mock');
-    if (k === 'exam') startMockExam(); else if (k === 'case') startMockCase(); else if (k === 'essay') startMockEssay(); else if (k === 'sprint') startSprint();
+    if (k === 'exam') startMockExam(); else if (k === 'case') startMockCase(); else if (k === 'essay') startMockEssay();
   });
   $('#btnMockQuit').addEventListener('click', function () { mockExit(); toast('已退出模考'); });
   $('#btnMockSubmit').addEventListener('click', function () { if (mockState.onExpire) { var fn = mockState.onExpire; mockState.onExpire = null; fn(); } });
@@ -1369,22 +1355,12 @@
     else if (e.key === 'b' || e.key === 'B') setBgm(!Store.data.settings.bgm, true);
   });
 
-  function updateCountdown() {
-    var el = $('#examCountdown'); if (!el) return;
-    var target = new Date(2026, 9, 24, 9, 0, 0); // 10/24 软考开考日
-    var days = Math.ceil((target - new Date()) / 86400000);
-    if (days > 0) el.innerHTML = '📅 距软考 10/24 还有 <b>' + days + '</b> 天';
-    else if (days === 0) el.innerHTML = '🔥 今天考试！';
-    else el.innerHTML = '✅ 考试已结束';
-  }
-
   /* ---------------- 启动 ---------------- */
   lastDataRef = Store.data;
   Sync.onChange(afterCloudChange);
   applySettings();
   if (Store.data.settings.bgm && window.Bgm) Bgm.startWhenAllowed(); // 等首次点击/按键后才真正出声
   updateSide();
-  updateCountdown();
   // 词库数据按需加载，加载完成后再做依赖它的首屏渲染
   ensureTerms().then(function () {
     renderLibrary();
