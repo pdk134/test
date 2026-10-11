@@ -25,9 +25,38 @@
     var swOK = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
     if (swOK) {
       window.addEventListener('load', function () {
-        navigator.serviceWorker.register('sw.js').catch(function (err) {
+        navigator.serviceWorker.register('sw.js').then(function (reg) {
+          // 若已有一个等待中的新版，直接提示
+          if (reg.waiting) promptUpdate(reg.waiting);
+          reg.addEventListener('updatefound', function () {
+            var nw = reg.installing;
+            if (!nw) return;
+            nw.addEventListener('statechange', function () {
+              if (nw.state === 'installed' && navigator.serviceWorker.controller) promptUpdate(nw);
+            });
+          });
+        }).catch(function (err) {
           console.warn('SW 注册失败（不影响使用）:', err);
         });
+
+        // 用户同意更新后，新 SW 接管时刷新页面
+        var updated = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function () {
+          if (updated) window.location.reload();
+        });
+
+        function promptUpdate(sw) {
+          if (document.getElementById('updateBar')) return;
+          var el = document.createElement('div');
+          el.className = 'update-bar';
+          el.id = 'updateBar';
+          el.innerHTML = '<p>发现新版本，点击刷新使用最新内容。</p>' +
+            '<button class="btn primary">立即刷新</button>' +
+            '<button class="x" aria-label="关闭">✕</button>';
+          el.querySelector('.btn').addEventListener('click', function () { updated = true; sw.postMessage('skip-waiting'); });
+          el.querySelector('.x').addEventListener('click', function () { el.remove(); });
+          document.body.appendChild(el);
+        }
       });
     }
   }
