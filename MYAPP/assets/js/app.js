@@ -1355,6 +1355,37 @@
     else if (e.key === 'b' || e.key === 'B') setBgm(!Store.data.settings.bgm, true);
   });
 
+  /* ---------------- 考前倒计时 ---------------- */
+  // 考试日期：软考高级系统架构设计师（可在此修改）
+  var EXAM_DATE = new Date(2026, 9, 24, 9, 0, 0); // 月份从 0 计，9 = 10 月
+  var cdTimer = null;
+  function renderCountdown() {
+    var bar = $('#countdownBar'), dEl = $('#cdDays'), tEl = $('#cdTime');
+    if (!bar || !dEl || !tEl) return;
+    var diff = EXAM_DATE.getTime() - Date.now();
+    if (diff <= 0) {
+      clearInterval(cdTimer); cdTimer = null;
+      dEl.textContent = '0';
+      tEl.textContent = '00:00:00';
+      bar.classList.remove('urgent', 'soon');
+      bar.classList.add('now');
+      bar.querySelector('.cd-label').textContent = '软考 · 系统架构设计师 进行中';
+      bar.querySelector('.cd-date').textContent = '稳住，你能行！';
+      return;
+    }
+    var s = Math.floor(diff / 1000);
+    var days = Math.floor(s / 86400); s -= days * 86400;
+    var h = Math.floor(s / 3600); s -= h * 3600;
+    var m = Math.floor(s / 60); var sec = s - m * 60;
+    dEl.textContent = days;
+    tEl.textContent = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+    // 紧迫感分级：<7 天 urgent（红脉冲），<15 天 soon（暖色）
+    bar.classList.toggle('urgent', days < 7);
+    bar.classList.toggle('soon', days >= 7 && days < 15);
+  }
+  renderCountdown();
+  cdTimer = setInterval(renderCountdown, 1000);
+
   /* ---------------- 启动 ---------------- */
   lastDataRef = Store.data;
   Sync.onChange(afterCloudChange);
