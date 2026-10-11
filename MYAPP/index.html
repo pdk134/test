@@ -125,6 +125,25 @@
 
     <!-- 测试 -->
     <section class="view" id="view-quiz">
+      <div class="panel mock-entry" id="mockEntry">
+        <h3>🎯 全真模拟考试</h3>
+        <p class="muted">按真实考试节奏限时模考，时间到自动交卷。综合 75 题（150min）· 案例 3 套（90min）· 论文 1 题（120min）。</p>
+        <div class="mock-btns">
+          <button class="btn ghost block" data-mock="exam">综合知识模考 · 75 题 / 150min</button>
+          <button class="btn ghost block" data-mock="case">案例分析模考 · 3 套 / 90min</button>
+          <button class="btn ghost block" data-mock="essay">论文写作模考 · 1 题 / 120min</button>
+        </div>
+      </div>
+
+      <div class="mock-timer hidden" id="mockTimer">
+        <span class="mock-clock" id="mockClock">00:00</span>
+        <b class="mock-label" id="mockLabel"></b>
+        <button class="btn primary" id="btnMockSubmit">交卷</button>
+        <button class="btn ghost" id="btnMockQuit">退出</button>
+      </div>
+
+      <div id="quizMock" class="hidden"></div>
+
       <div class="seg" id="quizSeg">
         <button class="seg-item active" data-seg="term">术语自测</button>
         <button class="seg-item" data-seg="exam">选择题</button>
@@ -300,6 +319,12 @@
         <h3>难词本</h3>
         <div class="lib-list" id="hardList"></div>
       </div>
+
+      <div class="panel">
+        <h3>真题错题本</h3>
+        <p class="muted">练习与模考中标记的薄弱点，集中复盘。</p>
+        <div class="lib-list" id="wrongList"></div>
+      </div>
     </section>
 
     <!-- 设置 -->
@@ -445,11 +470,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="assets/js/terms.js"></script>
-<script src="assets/js/questions.js"></script>
-<script src="assets/js/case.js"></script>
-<script src="assets/js/essay.js"></script>
-<script src="assets/js/points.js"></script>
+<!-- 数据文件（terms/questions/case/essay/points）改为运行时按需懒加载，见 app.js ensure*()，首屏只载核心壳 -->
 <script src="assets/js/store.js"></script>
 <script src="assets/js/srs.js"></script>
 <script src="assets/js/config.js"></script>
