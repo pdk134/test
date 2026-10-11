@@ -2,16 +2,40 @@
 (function () {
   'use strict';
 
-  var TERMS = window.TERMS || [];
+  var TERMS = [];
   var byId = {};
   var CATS = [];
   var $ = function (s) { return document.querySelector(s); };
 
-  TERMS.forEach(function (t) {
-    t.id = t.t;
-    byId[t.id] = t;
-    if (CATS.indexOf(t.c) < 0) CATS.push(t.c);
-  });
+  function initTerms() {
+    TERMS = (window.TERMS || []).slice();
+    byId = {}; CATS = [];
+    TERMS.forEach(function (t) {
+      t.id = t.t;
+      byId[t.id] = t;
+      if (CATS.indexOf(t.c) < 0) CATS.push(t.c);
+    });
+  }
+
+  /* ---------------- 按需懒加载数据脚本（首屏减负，离线仍可用） ---------------- */
+  var _SCRIPTS = {};
+  function loadScript(name) {
+    if (_SCRIPTS[name]) return _SCRIPTS[name];
+    _SCRIPTS[name] = new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = 'assets/js/' + name;
+      s.onload = function () { resolve(); };
+      s.onerror = function () { reject(new Error('加载失败: ' + name)); };
+      document.head.appendChild(s);
+    });
+    return _SCRIPTS[name];
+  }
+  var _ready = {};
+  function ensureTerms() { return loadScript('terms.js').then(function () { if (!_ready.terms) { initTerms(); _ready.terms = true; } }); }
+  function ensureExam() { return loadScript('questions.js').then(function () { if (!_ready.exam) { EXAM_ALL = (window.EXAM_QUESTIONS || []).slice(); _ready.exam = true; } }); }
+  function ensureCase() { return loadScript('case.js').then(function () { if (!_ready.case) { CASE_ALL = (window.EXAM_CASES || []).slice(); _ready.case = true; } }); }
+  function ensureEssay() { return loadScript('essay.js').then(function () { if (!_ready.essay) { ESSAY_ALL = (window.EXAM_ESSAYS || []).slice(); _ready.essay = true; } }); }
+  function ensurePoints() { return loadScript('points.js').then(function () { if (!_ready.points) { POINTS = (window.TEXTBOOK_POINTS || []).slice(); _ready.points = true; } }); }
 
   /* ---------------- 通用 ---------------- */
   var VIEWS = {
@@ -31,11 +55,12 @@
     for (var j = 0; j < items.length; j++) items[j].classList.toggle('active', items[j].getAttribute('data-view') === name);
     $('#pageTitle').textContent = VIEWS[name][0];
     $('#pageSub').textContent = VIEWS[name][1];
-    if (name === 'learn') { if (!session.items.length) startSession(); else renderCard(); }
-    if (name === 'library') renderLibrary();
-    if (name === 'stats') renderStats();
+    if (name === 'learn') ensureTerms().then(function () { if (!session.items.length) startSession(); else renderCard(); });
+    if (name === 'library') ensureTerms().then(renderLibrary);
+    if (name === 'stats') ensureTerms().then(renderStats);
     if (name === 'account') renderAccount();
-    if (name === 'points') renderPoints();
+    if (name === 'points') ensurePoints().then(renderPoints);
+    if (name === 'quiz') ensureTerms(); // 术语自测默认分段依赖词库
     window.scrollTo(0, 0);
   }
 
@@ -241,9 +266,7 @@
     if (Store.data !== lastDataRef) {
       lastDataRef = Store.data;
       applySettings();
-      startSession();
-      renderLibrary();
-      renderStats();
+      ensureTerms().then(function () { startSession(); renderLibrary(); renderStats(); });
     }
     if ($('#view-account').classList.contains('active')) renderAccount();
   }
@@ -443,6 +466,13 @@
         '<span class="badge learning">遗忘 ' + c.lapses + ' · 错 ' + c.wrong + '</span></div>' +
         '<div class="lib-def">' + (t.d || '') + '</div></div>';
     }).join('') : '<p class="muted">还没有难词，保持住</p>';
+
+    // 真题错题本（综合错题来自 examStore，案例/论文来自 wrongExtra）
+    var wc = examStore.wrongCount(), cc = wrongExtra.count('case'), ec = wrongExtra.count('essay');
+    var wl = '<div class="wrong-row" data-wrong="exam"><span>综合知识错题</span><b>' + wc + '</b><button class="btn ghost">去复习</button></div>' +
+      '<div class="wrong-row" data-wrong="case"><span>案例待巩固</span><b>' + cc + '</b><button class="btn ghost"' + (cc ? '' : ' disabled style="opacity:.5"') + '>去复习</button></div>' +
+      '<div class="wrong-row" data-wrong="essay"><span>论文待巩固</span><b>' + ec + '</b><button class="btn ghost"' + (ec ? '' : ' disabled style="opacity:.5"') + '>去复习</button></div>';
+    $('#wrongList').innerHTML = wl;
   }
 
   /* ---------------- 历年真题（软考架构师·综合知识） ---------------- */
@@ -472,6 +502,21 @@
     bumpDone: function () { this.data.totalDone++; this.save(); }
   };
   examStore.load();
+
+  // 案例 / 论文 的「待巩固」错题（选择题错题由 examStore 管理）
+  var wrongExtra = (function () {
+    var KEY = 'arch-term-wrong-extra';
+    var d = { case: {}, essay: {} };
+    try { d = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) {}
+    if (!d.case) d.case = {}; if (!d.essay) d.essay = {};
+    return {
+      has: function (t, id) { return !!d[t][id]; },
+      toggle: function (t, id) { if (d[t][id]) delete d[t][id]; else d[t][id] = 1; try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {} },
+      count: function (t) { return Object.keys(d[t]).length; },
+      ids: function (t) { return Object.keys(d[t]); },
+      clear: function (t) { d[t] = {}; try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {} }
+    };
+  })();
 
   var exam = { pool: [], i: 0, right: 0, wrong: [], filter: 'all', mode: 'random' };
 
@@ -728,6 +773,28 @@
     if (it) openDetail(it.getAttribute('data-open'));
   });
 
+  function showQuizPanel(seg) {
+    var panels = { term: '#quizTerm', exam: '#quizExam', case: '#quizCase', essay: '#quizEssay' };
+    Object.keys(panels).forEach(function (k) { $(panels[k]).classList.toggle('hidden', k !== seg); });
+    var items = document.querySelectorAll('#quizSeg .seg-item');
+    for (var i = 0; i < items.length; i++) items[i].classList.toggle('active', items[i].getAttribute('data-seg') === seg);
+  }
+  function reviewWrongSubject(t) {
+    switchView('quiz');
+    if (t === 'exam') {
+      ensureExam().then(function () { showQuizPanel('exam'); startExam(true); });
+    } else if (t === 'case') {
+      ensureCase().then(function () { showQuizPanel('case'); caseState.filter = '__wrong'; renderCaseStart(); startCase(); });
+    } else if (t === 'essay') {
+      ensureEssay().then(function () { showQuizPanel('essay'); renderEssayTpl(); renderEssayList(); });
+    }
+  }
+  $('#wrongList').addEventListener('click', function (e) {
+    var row = e.target.closest('[data-wrong]'); if (!row) return;
+    var btn = e.target.closest('.btn'); if (!btn || btn.disabled) return;
+    reviewWrongSubject(row.getAttribute('data-wrong'));
+  });
+
   document.addEventListener('click', function (e) {
     var g = e.target.closest('[data-goto]');
     if (g) openDetail(g.getAttribute('data-goto'));
@@ -758,9 +825,10 @@
     if (seg !== 'term') { $('#quizPlay').classList.add('hidden'); $('#quizResult').classList.add('hidden'); $('#quizStart').classList.remove('hidden'); }
     if (seg !== 'exam') { $('#examPlay').classList.add('hidden'); $('#examResult').classList.add('hidden'); $('#examStart').classList.remove('hidden'); }
     if (seg !== 'case') { $('#casePlay').classList.add('hidden'); $('#caseStart').classList.remove('hidden'); }
-    if (seg === 'exam') renderExamStart();
-    if (seg === 'case') renderCaseStart();
-    if (seg === 'essay') { renderEssayTpl(); renderEssayList(); }
+    if (seg === 'exam') ensureExam().then(renderExamStart);
+    if (seg === 'case') ensureCase().then(renderCaseStart);
+    if (seg === 'essay') ensureEssay().then(function () { renderEssayTpl(); renderEssayList(); });
+    if (seg === 'term') ensureTerms();
   });
   $('#examYears').addEventListener('click', function (e) {
     var c = e.target.closest('[data-ef]');
@@ -815,11 +883,14 @@
       var n = CASE_ALL.filter(function (c) { return c.y + c.s === s.key; }).length;
       chips += '<button class="chip' + (f === s.key ? ' on' : '') + '" data-cf="' + s.key + '">' + s.y + ' ' + s.s + ' · ' + n + '</button>';
     });
+    var wc = wrongExtra.count('case');
+    if (wc > 0) chips += '<button class="chip' + (f === '__wrong' ? ' on' : '') + '" data-cf="__wrong">待巩固 ' + wc + '</button>';
     $('#caseYears').innerHTML = chips;
   }
   function startCase() {
-    caseState.pool = caseState.filter === 'all' ? CASE_ALL.slice()
-      : CASE_ALL.filter(function (c) { return c.y + c.s === caseState.filter; });
+    if (caseState.filter === '__wrong') caseState.pool = CASE_ALL.filter(function (c) { return wrongExtra.has('case', c.id); });
+    else if (caseState.filter === 'all') caseState.pool = CASE_ALL.slice();
+    else caseState.pool = CASE_ALL.filter(function (c) { return c.y + c.s === caseState.filter; });
     if (!caseState.pool.length) { toast('该场次暂无案例'); return; }
     caseState.i = 0;
     $('#caseStart').classList.add('hidden');
@@ -844,6 +915,7 @@
         + '<button class="btn ghost case-reveal" data-ci="' + idx + '">显示参考答案</button>'
         + '<div class="case-a hidden" id="caseA' + idx + '">' + (q.a || '').replace(/</g, '&lt;') + '</div></div>';
     });
+    html += '<button class="btn ghost case-mark" data-cmark="' + c.id + '">' + (wrongExtra.has('case', c.id) ? '已标记待巩固 ✓' : '标记待巩固') + '</button>';
     html += '<button class="btn primary block" id="btnCaseNext">下一题</button>';
     $('#caseBody').innerHTML = html;
   }
@@ -869,6 +941,14 @@
       if (a) { a.classList.toggle('hidden'); rev.textContent = a.classList.contains('hidden') ? '显示参考答案' : '隐藏参考答案'; }
       return;
     }
+    var mk = e.target.closest('.case-mark');
+    if (mk) {
+      var cid = mk.getAttribute('data-cmark');
+      wrongExtra.toggle('case', cid);
+      mk.textContent = wrongExtra.has('case', cid) ? '已标记待巩固 ✓' : '标记待巩固';
+      toast(wrongExtra.has('case', cid) ? '已加入待巩固' : '已取消标记');
+      return;
+    }
     if (e.target.closest('#btnCaseNext')) { caseState.i++; renderCaseQ(); }
   });
 
@@ -891,14 +971,18 @@
   }
   function renderEssayList() {
     var f = essayState.filter;
-    var list = f === 'all' ? ESSAY_ALL.slice()
-      : ESSAY_ALL.filter(function (e) { return e.y + e.s === f; });
+    var list;
+    if (f === '__wrong') list = ESSAY_ALL.filter(function (e) { return wrongExtra.has('essay', e.id); });
+    else if (f === 'all') list = ESSAY_ALL.slice();
+    else list = ESSAY_ALL.filter(function (e) { return e.y + e.s === f; });
     list.sort(function (a, b) { return b.y - a.y || (b.s === '下半年' ? 1 : 0) - (a.s === '下半年' ? 1 : 0) || a.no - b.no; });
     var chips = '<button class="chip' + (f === 'all' ? ' on' : '') + '" data-ef2="all">全部 ' + ESSAY_ALL.length + ' 题</button>';
     essaySessions().forEach(function (s) {
       var n = ESSAY_ALL.filter(function (e) { return e.y + e.s === s.key; }).length;
       chips += '<button class="chip' + (f === s.key ? ' on' : '') + '" data-ef2="' + s.key + '">' + s.y + ' ' + s.s + ' · ' + n + '</button>';
     });
+    var we = wrongExtra.count('essay');
+    if (we > 0) chips += '<button class="chip' + (f === '__wrong' ? ' on' : '') + '" data-ef2="__wrong">待巩固 ' + we + '</button>';
     $('#essayYears').innerHTML = chips;
     var html = '';
     list.forEach(function (e) {
@@ -906,7 +990,8 @@
         + '<div class="ec-head"><span class="tag">' + e.y + ' ' + e.s + '</span><span class="tag lv">第 ' + e.no + ' 题</span></div>'
         + '<div class="ec-topic">' + e.topic + '</div>'
         + '<div class="ec-tips hidden">' + (e.tips || '').replace(/</g, '&lt;') + '</div>'
-        + '<button class="btn ghost ec-toggle">查看写作要点</button></div>';
+        + '<button class="btn ghost ec-toggle">查看写作要点</button>'
+        + '<button class="btn ghost ec-mark" data-emark="' + e.id + '">' + (wrongExtra.has('essay', e.id) ? '已标记待巩固 ✓' : '标记待巩固') + '</button></div>';
     });
     $('#essayList').innerHTML = html;
   }
@@ -919,7 +1004,167 @@
     var tips = card.querySelector('.ec-tips');
     var btn = card.querySelector('.ec-toggle');
     if (tips) { tips.classList.toggle('hidden'); if (btn) btn.textContent = tips.classList.contains('hidden') ? '查看写作要点' : '隐藏写作要点'; }
+    var mk = e.target.closest('.ec-mark');
+    if (mk) {
+      var eid = mk.getAttribute('data-emark');
+      wrongExtra.toggle('essay', eid);
+      mk.textContent = wrongExtra.has('essay', eid) ? '已标记待巩固 ✓' : '标记待巩固';
+      toast(wrongExtra.has('essay', eid) ? '已加入待巩固' : '已取消标记');
+    }
   });
+
+  /* ================= 全真模拟考试 ================= */
+  function shuffle(a) { a = a.slice(); for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+  var mockState = { timer: null, deadline: 0, onExpire: null, onClick: null };
+  function mockStartTimer(mins, label, onExpire) {
+    mockState.deadline = Date.now() + mins * 60000; mockState.onExpire = onExpire;
+    $('#mockLabel').textContent = label; $('#mockTimer').classList.remove('hidden');
+    mockTick(); mockState.timer = setInterval(mockTick, 1000);
+  }
+  function mockTick() {
+    var left = mockState.deadline - Date.now();
+    if (left <= 0) { left = 0; clearInterval(mockState.timer); $('#mockClock').textContent = '00:00'; var fn = mockState.onExpire; mockState.onExpire = null; if (fn) fn(); return; }
+    var m = Math.floor(left / 60000), s = Math.floor(left % 60000 / 1000);
+    $('#mockClock').textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+  }
+  function mockStopTimer() { clearInterval(mockState.timer); $('#mockTimer').classList.add('hidden'); }
+  function mockEnter() {
+    $('#mockEntry').classList.add('hidden'); $('#quizSeg').classList.add('hidden');
+    $('#quizTerm').classList.add('hidden'); $('#quizExam').classList.add('hidden');
+    $('#quizCase').classList.add('hidden'); $('#quizEssay').classList.add('hidden');
+    $('#quizMock').classList.remove('hidden');
+  }
+  function mockExit() {
+    mockStopTimer(); mockState.onClick = null;
+    $('#quizMock').classList.add('hidden'); $('#quizMock').innerHTML = '';
+    $('#mockEntry').classList.remove('hidden'); $('#quizSeg').classList.remove('hidden');
+    var items = document.querySelectorAll('#quizSeg .seg-item');
+    for (var i = 0; i < items.length; i++) items[i].classList.toggle('active', items[i].getAttribute('data-seg') === 'term');
+    $('#quizTerm').classList.remove('hidden');
+  }
+  $('#mockEntry').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-mock]'); if (!b) return;
+    if (window.Sfx) Sfx.click();
+    var k = b.getAttribute('data-mock');
+    if (k === 'exam') startMockExam(); else if (k === 'case') startMockCase(); else if (k === 'essay') startMockEssay();
+  });
+  $('#btnMockQuit').addEventListener('click', function () { mockExit(); toast('已退出模考'); });
+  $('#btnMockSubmit').addEventListener('click', function () { if (mockState.onExpire) { var fn = mockState.onExpire; mockState.onExpire = null; fn(); } });
+  $('#quizMock').addEventListener('click', function (e) { if (mockState.onClick) mockState.onClick(e); });
+
+  function startMockExam() {
+    ensureExam().then(function () {
+      if (!EXAM_ALL.length) { toast('真题数据加载中，请稍候'); return; }
+      var pool = shuffle(EXAM_ALL); if (pool.length > 75) pool = pool.slice(0, 75);
+      mockEnter();
+      var m = { i: 0, right: 0, wrong: [], pool: pool, total: pool.length };
+      function render() {
+        if (m.i >= m.total) return finish();
+        var q = m.pool[m.i];
+        $('#quizMock').innerHTML =
+          '<div class="progress-line"><div class="bar"><i style="width:' + (m.i / m.total * 100) + '%"></i></div><span class="counter">' + (m.i + 1) + ' / ' + m.total + '</span></div>' +
+          '<div class="quiz-q">' + (q.y + ' ' + q.s + ' 第' + q.no + '题 · ' + q.q).replace(/</g, '&lt;') + '</div>' +
+          '<div class="quiz-options" id="mOpt"></div>' +
+          '<div class="quiz-feedback hidden" id="mFb"></div>' +
+          '<button class="btn primary block hidden" id="mNext">下一题</button>';
+        $('#mOpt').innerHTML = q.o.map(function (o, i) { return '<button class="opt" data-i="' + i + '">' + 'ABCD'[i] + '. ' + o.replace(/</g, '&lt;') + '</button>'; }).join('');
+      }
+      function answer(b) {
+        var i = +b.getAttribute('data-i'), q = m.pool[m.i], ok = i === q.a;
+        b.classList.add(ok ? 'right' : 'wrong');
+        var opts = $('#mOpt').querySelectorAll('.opt');
+        for (var k = 0; k < opts.length; k++) { opts[k].disabled = true; if (+opts[k].getAttribute('data-i') === q.a) opts[k].classList.add('right'); }
+        if (ok) m.right++; else m.wrong.push(q.id);
+        var fb = (ok ? '<b style="color:var(--good)">回答正确</b>' : '<b style="color:var(--bad)">回答错误</b>') + '　正确答案 <span class="exam-ans">' + 'ABCD'[q.a] + '</span>';
+        if (q.e) fb += '<div class="quiz-exp">' + q.e.replace(/</g, '&lt;') + '</div>';
+        $('#mFb').innerHTML = fb; $('#mFb').classList.remove('hidden'); $('#mNext').classList.remove('hidden');
+        $('#mNext').textContent = m.i + 1 >= m.total ? '查看成绩' : '下一题';
+      }
+      function finish() {
+        mockState.onClick = null; mockStopTimer();
+        var acc = m.total ? Math.round(m.right / m.total * 100) + '%' : '0%';
+        $('#quizMock').innerHTML = '<div class="panel"><h3>模考完成 · 综合知识</h3>' +
+          '<div class="sum-grid"><div><b>' + m.total + '</b><span>题目</span></div><div><b>' + m.right + '</b><span>答对</span></div><div><b>' + acc + '</b><span>正确率</span></div><div><b>' + m.wrong.length + '</b><span>错题</span></div></div>' +
+          '<p class="muted">及格线 45 分（正确率≈60%）。时间到或交卷均按当前进度计分。</p>' +
+          '<div class="sum-actions"><button class="btn primary" id="mBack">返回真题</button></div></div>';
+        m.wrong.forEach(function (id) { examStore.markWrong(id); });
+        $('#mBack').addEventListener('click', mockExit);
+      }
+      mockState.onClick = function (e) {
+        var b = e.target.closest('.opt'); if (b && !b.disabled) { answer(b); return; }
+        if (e.target.closest('#mNext')) { m.i++; render(); }
+      };
+      mockStartTimer(150, '综合知识模考', finish);
+      render();
+    });
+  }
+
+  function startMockCase() {
+    ensureCase().then(function () {
+      if (!CASE_ALL.length) { toast('案例数据加载中，请稍候'); return; }
+      var pool = shuffle(CASE_ALL); if (pool.length > 3) pool = pool.slice(0, 3);
+      mockEnter();
+      var c = { i: 0, pool: pool, total: pool.length };
+      function render() {
+        if (c.i >= c.total) return finish();
+        var k = c.pool[c.i];
+        var html = '<div class="progress-line"><div class="bar"><i style="width:' + (c.i / c.total * 100) + '%"></i></div><span class="counter">案例 ' + (c.i + 1) + ' / ' + c.total + '</span></div>';
+        html += '<div class="case-meta">' + k.y + ' ' + k.s + (k.must ? ' · 必答题' : '') + (k.src ? ' · ' + k.src : '') + '</div>';
+        html += '<div class="case-scene"><b>背景</b>' + (k.scene || '').replace(/</g, '&lt;') + '</div>';
+        html += '<h4 class="case-topic">' + k.no + '、' + k.topic + '</h4>';
+        (k.questions || []).forEach(function (q, idx) {
+          html += '<div class="case-q"><div class="case-qh"><span class="case-no">问题' + (idx + 1) + '</span>' + (q.score ? '<span class="case-score">' + q.score + ' 分</span>' : '') + '</div>' +
+            '<div class="case-qt">' + (q.q || '').replace(/</g, '&lt;') + '</div>' +
+            '<button class="btn ghost case-reveal" data-ci="' + idx + '">显示参考答案</button>' +
+            '<div class="case-a hidden" id="mCaseA' + idx + '">' + (q.a || '').replace(/</g, '&lt;') + '</div></div>';
+        });
+        html += '<button class="btn primary block" id="mCaseNext">下一套</button>';
+        $('#quizMock').innerHTML = html;
+      }
+      function finish() {
+        mockState.onClick = null; mockStopTimer();
+        $('#quizMock').innerHTML = '<div class="panel"><h3>模考完成 · 案例分析</h3><p class="muted">已完成 ' + c.total + ' 套案例。交卷后请按评分点自评（每套约 75 分，及格 45）。</p><div class="sum-actions"><button class="btn primary" id="mBack">返回真题</button></div></div>';
+        $('#mBack').addEventListener('click', mockExit);
+      }
+      mockState.onClick = function (e) {
+        var rev = e.target.closest('.case-reveal');
+        if (rev) { var a = $('#mCaseA' + rev.getAttribute('data-ci')); if (a) { a.classList.toggle('hidden'); rev.textContent = a.classList.contains('hidden') ? '显示参考答案' : '隐藏参考答案'; } return; }
+        if (e.target.closest('#mCaseNext')) { c.i++; render(); }
+      };
+      mockStartTimer(90, '案例分析模考', finish);
+      render();
+    });
+  }
+
+  function startMockEssay() {
+    ensureEssay().then(function () {
+      if (!ESSAY_ALL.length) { toast('论文数据加载中，请稍候'); return; }
+      var e0 = shuffle(ESSAY_ALL)[0] || ESSAY_ALL[0];
+      mockEnter();
+      var tpl = window.EXAM_ESSAY_TPL || {};
+      function render() {
+        $('#quizMock').innerHTML = '<div class="case-meta">' + e0.y + ' ' + e0.s + ' · 第 ' + e0.no + ' 题</div>' +
+          '<h3 class="case-topic">' + e0.topic + '</h3>' +
+          '<p class="muted">请在下方撰写论文（建议 2500 字左右）。机考为电脑打字，先列提纲再展开，注意论点覆盖与项目真实性。</p>' +
+          '<textarea id="mEssay" class="essay-area" placeholder="在此撰写论文…"></textarea>' +
+          '<div class="essay-count">已写 <b id="mWord">0</b> 字（不计空格）</div>' +
+          '<details class="tpl-card"><summary>写作模板与本题要点</summary>' +
+          '<div class="tpl-row"><b>摘要公式</b><p>' + (tpl.summary || '') + '</p></div>' +
+          '<div class="tpl-row"><b>五段式</b><p>' + (tpl.structure || '') + '</p></div>' +
+          '<div class="tpl-row"><b>本题要点</b><p>' + (e0.tips || '').replace(/</g, '&lt;') + '</p></div></details>';
+        $('#mEssay').addEventListener('input', function () { $('#mWord').textContent = $('#mEssay').value.replace(/\s/g, '').length; });
+      }
+      function finish() {
+        mockState.onClick = null; mockStopTimer();
+        var w = $('#mEssay') ? $('#mEssay').value.replace(/\s/g, '').length : 0;
+        $('#quizMock').innerHTML = '<div class="panel"><h3>模考完成 · 论文</h3><p class="muted">本题已写 ' + w + ' 字。论文评分看项目真实性、论点覆盖度与深度，交卷后对照上方「本题要点」自测。</p><div class="sum-actions"><button class="btn primary" id="mBack">返回真题</button></div></div>';
+        $('#mBack').addEventListener('click', mockExit);
+      }
+      mockState.onClick = function () {};
+      mockStartTimer(120, '论文写作模考', finish);
+      render();
+    });
+  }
 
   /* ================= 教材考点（第二版） ================= */
   var POINTS = (window.TEXTBOOK_POINTS || []).slice();
@@ -951,6 +1196,7 @@
         html += '<div class="point-card' + (on ? ' mastered' : '') + '" data-pid="' + id + '">'
           + '<div class="pc-head"><span class="pc-t">' + p.t.replace(/</g, '&lt;') + '</span><span class="pc-tag tag lv">难度 ' + p.tag + '</span></div>'
           + '<div class="pc-d">' + p.d.replace(/</g, '&lt;') + '</div>'
+          + (p.rel && p.rel.length ? '<button class="btn ghost pc-rel" data-rel="' + p.rel.join(',') + '">相关真题 ' + p.rel.length + '</button>' : '')
           + '<button class="btn ghost pc-master">' + (on ? '已掌握 ✓' : '标记掌握') + '</button></div>';
       });
       html += '</div>';
@@ -964,6 +1210,8 @@
     ptState.filter = c.getAttribute('data-pf'); renderPoints();
   });
   $('#ptList').addEventListener('click', function (e) {
+    var rel = e.target.closest('.pc-rel');
+    if (rel) { openRelQuestions(rel.getAttribute('data-rel')); return; }
     var card = e.target.closest('.point-card'); if (!card) return;
     var id = card.getAttribute('data-pid');
     var on = !ptStore.has(id);
@@ -973,6 +1221,32 @@
     if (btn) btn.textContent = on ? '已掌握 ✓' : '标记掌握';
     $('#ptMastered').textContent = ptStore.count();
   });
+  function openRelQuestions(csv) {
+    var ids = (csv || '').split(',').filter(Boolean);
+    ensureExam().then(function () {
+      var qs = ids.map(function (id) {
+        for (var i = 0; i < EXAM_ALL.length; i++) if (EXAM_ALL[i].id === id) return EXAM_ALL[i];
+        return null;
+      }).filter(Boolean);
+      if (!qs.length) { toast('相关真题加载中'); return; }
+      var h = '<h3>考点相关真题（' + qs.length + ' 题）</h3>';
+      qs.forEach(function (q) {
+        h += '<div class="sec"><h4>' + q.y + ' ' + q.s + ' 第' + q.no + '题</h4>' +
+          '<p class="muted" style="font-size:14px;line-height:1.8">' + q.q.replace(/</g, '&lt;') + '</p>' +
+          '<p style="font-size:14px">正确答案：<span class="exam-ans">' + 'ABCD'[q.a] + '</span></p>' +
+          (q.e ? '<div class="quiz-exp">' + q.e.replace(/</g, '&lt;') + '</div>' : '') + '</div>';
+      });
+      h += '<div class="sum-actions"><button class="btn primary" id="mRelPractice">去真题练习</button></div>';
+      $('#modalBody').innerHTML = h;
+      $('#modal').classList.remove('hidden');
+      var bp = $('#mRelPractice');
+      if (bp) bp.addEventListener('click', function () {
+        $('#modal').classList.add('hidden');
+        switchView('quiz');
+        ensureExam().then(function () { showQuizPanel('exam'); startExam(false); });
+      });
+    });
+  }
 
   $('#setNew').addEventListener('change', function (e) { Store.data.settings.dailyNew = +e.target.value; Store.touch(); });
   $('#setRev').addEventListener('change', function (e) { Store.data.settings.dailyReview = +e.target.value; Store.touch(); });
@@ -1086,10 +1360,13 @@
   Sync.onChange(afterCloudChange);
   applySettings();
   if (Store.data.settings.bgm && window.Bgm) Bgm.startWhenAllowed(); // 等首次点击/按键后才真正出声
-  renderLibrary();
-  renderStats();
   updateSide();
-  startSession();
-  switchView('learn');
+  // 词库数据按需加载，加载完成后再做依赖它的首屏渲染
+  ensureTerms().then(function () {
+    renderLibrary();
+    renderStats();
+    startSession();
+    switchView('learn');
+  });
   Sync.init().then(function () { afterCloudChange(); });
 })();
