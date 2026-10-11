@@ -3,7 +3,7 @@
    - App Shell（HTML/CSS/JS/图标/manifest）：cache-first + 后台更新（stale-while-revalidate 变体）
    - Supabase API / CDN：network-only（不缓存动态数据与第三方 SDK）
 */
-var CACHE = 'arch-term-v4';
+var CACHE = 'arch-term-v5';
 
 var SHELL = [
   './',
@@ -31,10 +31,13 @@ self.addEventListener('install', function (e) {
   e.waitUntil(
     caches.open(CACHE).then(function (c) {
       return c.addAll(SHELL);
-    }).then(function () {
-      return self.skipWaiting();
     })
   );
+});
+
+// 收到页面消息后跳过等待，立即激活新版本（配合页面「刷新使用新版」提示）
+self.addEventListener('message', function (e) {
+  if (e.data === 'skip-waiting') self.skipWaiting();
 });
 
 self.addEventListener('activate', function (e) {
