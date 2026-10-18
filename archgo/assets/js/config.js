@@ -19,18 +19,17 @@
  * - url / anonKey 是 Supabase 项目的公开信息，anon key 只代表「未登录匿名角色」，
  *   设计上就放在前端代码里；真正的安全边界是 progress 表的 RLS 策略（每人只能读写自己那一行）。
  * - 千万不要填 service_role / secret keys，那类 key 会绕过 RLS，泄露后任何人可读写全表。
- * - 账号页会顶行显示当前项目 ref 与表名，用它来确认自己实际连的是哪个环境。
+ * - 想确认当前实际连的是哪个环境：开发环境页面顶部有黄黑警示条；
+ *   生产环境不显示任何痕迹，在网址后加 ?env 可临时强制查看。
  */
 
 window.SUPABASE_ENVS = {
-  // 生产（软考备考正式使用）
-  prod: {
+  prod: {    // 生产（软考备考正式使用）
     url: 'https://wyuhxtnchkndkrsfknlh.supabase.co',
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind5dWh4dG5jaGtuZGtyc2ZrbmxoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEyNTI3NDYsImV4cCI6MjEwNjgyODc0Nn0.XUzq6y9IfC6HTdGXY6UrXI2Jb2tGbbzZ8yeRfIpUUyQ',
     table: 'progress'
   },
-  // 开发（nanana 分支，日常调试与试验都在这里）
-  dev: {
+  dev: {     // 开发（nanana 分支，日常调试与试验都在这里）
     url: 'https://jyytfphsldxmmxqltqvp.supabase.co',
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp5eXRmcGhzbGR4bW14cWx0cXZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzMTEwMjEsImV4cCI6MjEwNzg4NzAyMX0.-XMvA5peX95a11gccCxoSZAn94FFssRWmrdSaL5fhkA',
     table: 'progress'
