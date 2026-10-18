@@ -39,6 +39,36 @@ window.Sync = (function () {
     return window.SUPABASE_ENV === 'prod' ? 'prod' : 'dev';
   }
 
+  var DEFAULT_USER_DOMAIN = 'archgo-user.invalid';
+  function usernameDomain() {
+    return (window.SUPABASE_USERNAME_DOMAIN || DEFAULT_USER_DOMAIN).trim();
+  }
+
+  /**
+   * 把用户填的「邮箱或用户名」归一化成 Supabase 能接受的邮箱。
+   * 用户名不做查表映射，而是确定性拼成 name@域名 —— 因此换设备、换浏览器结果完全一致，
+   * 也不会多出一张需要维护的映射表。
+   */
+  function toAuthId(input) {
+    var v = String(input == null ? '' : input).trim().toLowerCase();
+    if (!v) return '';
+    if (v.indexOf('@') >= 0) return v;
+    return v + '@' + usernameDomain();
+  }
+
+  /** 反向：把合成邮箱还原成用户当初填的东西，用于界面显示（避免显示 alice@archgo-user.invalid） */
+  function displayId(email) {
+    var e = String(email || '');
+    var suffix = '@' + usernameDomain();
+    if (e.length > suffix.length && e.slice(-suffix.length) === suffix) return e.slice(0, -suffix.length);
+    return e;
+  }
+
+  /** 判断输入是邮箱还是用户名 */
+  function isEmailInput(input) {
+    return String(input || '').indexOf('@') >= 0;
+  }
+
   function loadConfig() {
     // 旧版本在「账号页 → 高级」里把项目配置写进 localStorage 覆盖 config.js，
     // 而那个入口已经下线。这种残留配置切分支也不会失效，会让 App 一直连着旧项目，
@@ -177,7 +207,7 @@ window.Sync = (function () {
     var c = clientNow();
     if (!c) { state.status = 'error'; state.message = '请先填写 Supabase 配置'; emit(); return false; }
     try {
-      var res = await c.auth.signUp({ email: email, password: password });
+      var res = await c.auth.signUp({ email: toAuthId(email), password: password });
       if (res.error) { fail(res.error); return false; }
       if (!res.data.session) {
         state.status = 'ready';
@@ -196,7 +226,7 @@ window.Sync = (function () {
     var c = clientNow();
     if (!c) { state.status = 'error'; state.message = '请先填写 Supabase 配置'; emit(); return false; }
     try {
-      var res = await c.auth.signInWithPassword({ email: email, password: password });
+      var res = await c.auth.signInWithPassword({ email: toAuthId(email), password: password });
       if (res.error) { fail(res.error); return false; }
       user = res.data.user;
       state.email = user.email;
@@ -254,6 +284,10 @@ window.Sync = (function () {
     config: function () { return cfg; },
     tableName: tableName,
     envName: envName,
+    toAuthId: toAuthId,
+    displayId: displayId,
+    isEmailInput: isEmailInput,
+    usernameDomain: usernameDomain,
     signIn: signIn,
     signUp: signUp,
     signOut: signOut,

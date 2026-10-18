@@ -320,7 +320,7 @@
     // 未登录时清掉上一次留下的提示，避免退出登录后还挂着旧文案
     if (!logged) authFeedback('');
     if (logged) {
-      $('#acctEmailShow').textContent = s.email;
+      $('#acctEmailShow').textContent = Sync.displayId(s.email);
       $('#acctStatus').textContent = STATUS_TEXT[s.status] || s.status;
       // 项目 ref / 表名属于部署内部信息，不对终端用户暴露；排查时看控制台即可
       var info = s.message || '';
@@ -1340,12 +1340,22 @@
 
   /* ---------------- 账号登录：等待态 + 行内反馈 ---------------- */
 
-  /** Supabase 返回的是英文原话，映射成用户看得懂的中文 */
-  function friendlyAuthError(msg) {
+  /** Supabase 返回的是英文原话，映射成用户看得懂的中文。
+   *  wasEmail=false 表示这次是用「用户名」登录/注册的 —— 错误提示要区别对待。 */
+  function friendlyAuthError(msg, wasEmail) {
     var m = String(msg || '');
-    if (/invalid login credentials/i.test(m)) return '邮箱或密码不正确，请重新输入';
-    if (/email not confirmed/i.test(m)) return '邮箱尚未验证，请先到邮箱点击确认链接';
-    if (/user already registered/i.test(m)) return '该邮箱已注册，请直接登录';
+    if (/invalid login credentials/i.test(m)) {
+      return wasEmail ? '邮箱或密码不正确，请重新输入'
+                      : '用户名或密码不正确，请确认后重试（注意区分大小写不敏感，但用户名要拼对）';
+    }
+    if (/email not confirmed/i.test(m)) {
+      return wasEmail ? '邮箱尚未验证，请先到邮箱点击确认链接'
+                      : '该用户名需先完成邮箱验证才能登录 —— 用户名账号用的是无法收信的合成邮箱，'
+                        + '请改用邮箱注册，或在 Supabase 后台关闭 Confirm email';
+    }
+    if (/user already registered/i.test(m)) {
+      return wasEmail ? '该邮箱已注册，请直接登录' : '该用户名已被占用，换一个试试';
+    }
     if (/password should be at least/i.test(m)) return '密码至少需要 6 位';
     if (/unable to validate email/i.test(m)) return '邮箱格式不正确';
     if (/rate limit|too many/i.test(m)) return '操作过于频繁，请稍后再试';
@@ -1384,30 +1394,46 @@
     });
   }
 
+  /** 标识符校验：邮箱或用户名都放行，分别给出各自的规则提示 */
+  function checkIdentifier(raw) {
+    var id = String(raw || '').trim();
+    if (!id) return { ok: false, msg: '请填写邮箱或用户名' };
+    if (Sync.isEmailInput(id)) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(id)) return { ok: false, msg: '邮箱格式不正确' };
+      return { ok: true, id: id, email: true };
+    }
+    // 用户名：3-32 位，字母或数字开头，只允许字母数字 . _ -
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{2,31}$/.test(id)) {
+      return { ok: false, msg: '用户名需 3–32 位，以字母或数字开头，只能含字母、数字、. _ -' };
+    }
+    return { ok: true, id: id, email: false };
+  }
+
   function doAuth(isSignUp) {
     if (authBusy) return;
-    var email = $('#acctEmail').value.trim(), pwd = $('#acctPwd').value;
-    if (!email) { authFeedback('请填写邮箱'); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { authFeedback('邮箱格式不正确'); return; }
+    var chk = checkIdentifier($('#acctEmail').value);
+    if (!chk.ok) { authFeedback(chk.msg); return; }
+    var pwd = $('#acctPwd').value;
     if (pwd.length < 6) { authFeedback('密码至少 6 位'); return; }
 
     authFeedback('');
     setAuthBusy(true, isSignUp ? '注册中…' : '登录中…');
 
-    var p = isSignUp ? Sync.signUp(email, pwd) : Sync.signIn(email, pwd);
+    var p = isSignUp ? Sync.signUp(chk.id, pwd) : Sync.signIn(chk.id, pwd);
     p.then(function (ok) {
       setAuthBusy(false);
       renderAccount();
       if (ok) {
         // 成功：toast 只是辅助，主反馈是下面这块常驻的成功提示
-        authFeedback('✓ ' + (isSignUp ? '注册成功，已自动登录' : '登录成功') + '，学习数据开始云端同步');
+        var who = chk.email ? chk.id : '用户名 ' + chk.id;
+        authFeedback('✓ ' + (isSignUp ? '注册成功，已自动登录' : '登录成功') + '（' + who + '），学习数据开始云端同步');
         toast(isSignUp ? '注册成功，已自动登录' : '登录成功');
       } else {
-        authFeedback(friendlyAuthError(Sync.state().message), false);
+        authFeedback(friendlyAuthError(Sync.state().message, chk.email), false);
       }
     }).catch(function (e) {
       setAuthBusy(false);
-      authFeedback(friendlyAuthError((e && e.message) || e), false);
+      authFeedback(friendlyAuthError((e && e.message) || e, chk.email), false);
     });
   }
 
