@@ -438,6 +438,7 @@
           <button class="btn primary" id="btnSignIn">登录</button>
           <button class="btn ghost" id="btnSignUp">注册</button>
         </div>
+        <p class="hidden" id="acctErr"></p>
         <p class="muted hidden" id="acctNoCfg" style="margin-top:10px">当前版本未内置云端服务，登录暂不可用。学习记录仍会完整保存在本机，云端服务恢复后自动续上。</p>
       </div>
 
@@ -451,6 +452,7 @@
           <button class="btn primary" id="btnSyncNow">立即同步</button>
           <button class="btn ghost" id="btnSignOut">退出登录</button>
         </div>
+        <p class="hidden" id="acctUserMsg"></p>
         <p class="muted" style="margin-top:10px">两端都在线时会自动同步：本机改动 2.5 秒后上传，切回页面时拉取云端最新数据。</p>
       </div>
     </section>
