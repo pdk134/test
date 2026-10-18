@@ -42,3 +42,14 @@ window.SUPABASE_ENV = 'dev';
 // ↑↑↑ 请保留上面的写法（等号两侧可有空格），替换脚本依赖这个正则 ↑↑↑
 
 window.SUPABASE_CONFIG = window.SUPABASE_ENVS[window.SUPABASE_ENV] || window.SUPABASE_ENVS.dev;
+
+/**
+ * 「用户名登录」用的合成邮箱域名。
+ *
+ * Supabase Auth 只认邮箱，所以用户填用户名时，会确定性地拼成 `用户名@该域名`
+ * 再交给它。用 `.invalid` 结尾是因为它是 RFC 2606 保留域名，保证解析不到、
+ * 不会有真实邮件投递出去（已实测 Supabase 接受这种地址）。
+ *
+ * ⚠️ 这个域名一旦上线就不要再改：改了等于所有用户名账号集体失联（登录会算成另一个邮箱）。
+ */
+window.SUPABASE_USERNAME_DOMAIN = 'archgo-user.invalid';

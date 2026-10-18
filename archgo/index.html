@@ -430,18 +430,19 @@
       <div class="panel" id="acctAuth">
         <h3>登录 / 注册</h3>
         <div class="form-row">
-          <label>邮箱</label>
-          <input type="email" id="acctEmail" placeholder="you@example.com" class="wide">
+          <label>邮箱或用户名</label>
+          <input type="text" id="acctEmail" placeholder="you@example.com 或 用户名" class="wide" autocomplete="username" autocapitalize="none" spellcheck="false">
         </div>
         <div class="form-row">
           <label>密码</label>
-          <input type="password" id="acctPwd" placeholder="至少 6 位" class="wide">
+          <input type="password" id="acctPwd" placeholder="至少 6 位" class="wide" autocomplete="current-password">
         </div>
         <div class="sum-actions" style="justify-content:flex-start">
           <button class="btn primary" id="btnSignIn">登录</button>
           <button class="btn ghost" id="btnSignUp">注册</button>
         </div>
-        <p class="hidden" id="acctErr"></p>
+        <p class="muted hidden" id="acctErr"></p>
+        <p class="muted" style="margin:8px 0 0;font-size:11.5px;line-height:1.6">没有邮箱也能用：直接填用户名（3–32 位，字母或数字开头，可含 <code>.</code> <code>_</code> <code>-</code>），登录时填同样的用户名即可。</p>
         <p class="muted hidden" id="acctNoCfg" style="margin-top:10px">当前版本未内置云端服务，登录暂不可用。学习记录仍会完整保存在本机，云端服务恢复后自动续上。</p>
       </div>
 
