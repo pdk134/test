@@ -488,6 +488,61 @@ input.switch:checked::after { transform: translateX(20px); }
 
 .hidden { display: none !important; }
 
+/* ---------------- 登录门禁 ----------------
+   未登录时整页盖住。应用本体用 visibility:hidden 而不是 display:none：
+   保留布局高度，登录解锁的瞬间页面不会跳一下；同时天然吃掉所有点击与触摸。
+   滚动锁在 body 上，门禁自身可滚 —— 小屏 + 软键盘弹出时按钮不会被顶出屏幕。
+   z-index 取 55：压在 modal/install-bar 之上，但低于 toast / update-bar（60），
+   这样「已退出登录」这类提示仍能浮在门禁之上。 */
+.gate {
+  position: fixed; inset: 0; z-index: 55;
+  display: flex; align-items: center; justify-content: center;
+  padding: calc(18px + var(--sat)) 16px calc(18px + var(--sab));
+  background: var(--bg);
+  overflow-y: auto;
+}
+body.gated { overflow: hidden; }
+body.gated .app { visibility: hidden; }
+
+.gate-card {
+  width: 100%; max-width: 380px;
+  padding: 24px 18px 18px;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 20px; box-shadow: var(--shadow);
+}
+.gate-logo {
+  width: 52px; height: 52px; margin: 0 auto 14px;
+  display: grid; place-items: center; border-radius: 16px;
+  font-size: 26px; font-weight: 700; color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+}
+.gate-title { text-align: center; font-size: 19px; letter-spacing: .5px; }
+.gate-sub {
+  margin: 7px 0 16px; text-align: center;
+  font-size: 13px; line-height: 1.6; color: var(--text-dim);
+}
+.gate-sub.err { color: var(--bad); }
+.gate-sub .spin {
+  display: inline-block; width: 11px; height: 11px; margin-right: 6px;
+  border: 2px solid currentColor; border-right-color: transparent;
+  border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -1px;
+}
+.gate-env {
+  margin: -4px 0 14px; padding: 6px 10px; border-radius: 9px;
+  text-align: center; font-size: 11.5px; line-height: 1.5;
+  color: var(--text-dim); background: var(--panel-2);
+  border: 1px solid var(--line); word-break: break-all;
+}
+/* 搬进来的登录面板去掉自身外框，避免「卡中卡」两层边框；标题与门禁大标题重复 */
+.gate-form .panel { background: transparent; border: 0; padding: 0; margin: 0; box-shadow: none; }
+.gate-form .panel > h3 { display: none; }
+/* 表单改成上下排：门禁卡片比账号页窄，横排会把 label 挤到截断、
+   输入框的 placeholder 也放不下（320px 屏上尤其明显） */
+.gate-form .form-row { display: block; padding: 7px 0; }
+.gate-form .form-row label { display: block; margin-bottom: 6px; font-size: 12.5px; color: var(--text-dim); }
+.gate-form input.wide { display: block; width: 100%; }
+.gate-foot { margin: 14px 0 0; text-align: center; font-size: 11.5px; line-height: 1.6; color: var(--text-dim); }
+
 /* 环境标识条：只在开发构建渲染，生产环境不存在，对终端用户完全不可见 */
 .env-badge {
   display: flex; align-items: center; justify-content: center; gap: 8px;

@@ -23,6 +23,127 @@
     return el;
   }
 
+  /* ---------------- 登录门禁 ---------------- */
+  /**
+   * 未登录 = 不能进入应用。门禁整页盖住，应用本体 visibility:hidden。
+   *
+   * 四个状态：
+   *   off      —— 页面里没有门禁节点（正常不会出现，见 ensureGate 的兜底），完全放行
+   *   checking —— 启动就盖上，等 Supabase 的 getSession() 返回
+   *   locked   —— 已确认未登录，等用户登录
+   *   open     —— 已登录，放行
+   *
+   * 关键取舍：登录表单是「搬」进来的，不是复制一份。
+   * 门禁与账号页共用同一个 #acctAuth 节点，于是校验、错误提示、防重复提交、
+   * 邮箱/用户名双支持全都只有一套实现，不会出现两个入口行为不一致。
+   * appendChild 会带着节点上已绑的事件监听一起搬走，不需要重新绑定。
+   */
+  var gateState = 'checking';
+
+  var GATE_MARKUP =
+    '<div class="gate-logo">架</div>' +
+    '<h2 class="gate-title">架构术语学习通</h2>' +
+    '<p class="gate-sub" id="gateSub"><span class="spin"></span>正在检查登录状态…</p>' +
+    '<div class="gate-env hidden" id="gateEnv"></div>' +
+    '<div class="gate-form" id="gateForm"></div>' +
+    '<button class="btn ghost block hidden" id="gateRetry">重新加载</button>' +
+    '<p class="gate-foot">登录后学习进度在手机与电脑之间自动同步</p>';
+
+  /**
+   * 页面里没有门禁节点时按需补一个。
+   * SW 是 cache-first，发布过程中可能出现「新 app.js + 旧 index.html」的错搭；
+   * 门禁若只存在于 HTML 里，那一刻就会整个失效 —— 而那正是最需要它生效的时刻。
+   */
+  function ensureGate() {
+    var g = $('#gate');
+    if (g) return g;
+    g = document.createElement('div');
+    g.className = 'gate';
+    g.id = 'gate';
+    g.innerHTML = GATE_MARKUP;
+    document.body.insertBefore(g, document.body.firstChild);
+    return g;
+  }
+
+  /** 把登录面板搬进目标容器（幂等）。搬回账号页时放回原位，保持两个面板的先后顺序 */
+  function moveAuthPanel(slot) {
+    var panel = $('#acctAuth'), home = $('#view-account');
+    if (!panel || !slot || !home) return;
+    if (slot === home) {
+      if (panel !== home.firstChild) home.insertBefore(panel, home.firstChild);
+      return;
+    }
+    if (panel.parentNode !== slot) slot.appendChild(panel);
+  }
+
+  function envForced() {
+    try { return new URLSearchParams(location.search).get('env') != null; }
+    catch (e) { return /[?&]env\b/.test(location.search); }
+  }
+
+  /** 门禁里的环境标识：门禁盖住 .app，此时顶部的 env-badge 看不到，这里补一份 */
+  function renderGateEnv() {
+    var el = $('#gateEnv');
+    if (!el) return;
+    var isDev = Sync.envName() !== 'prod';
+    if (!isDev && !envForced()) { el.classList.add('hidden'); return; }
+    el.classList.remove('hidden');
+    el.textContent = isDev
+      ? '⚠ 开发环境 · 数据存于开发库，与生产互不相通'
+      : '生产环境 · ' + projectTag() + ' · 表 ' + Sync.tableName();
+  }
+
+  function paintGate(text, isErr) {
+    var sub = $('#gateSub'), retry = $('#gateRetry'), noCfg = $('#acctNoCfg');
+    if (sub) { sub.textContent = text; sub.classList.toggle('err', !!isErr); }
+    if (retry) retry.classList.toggle('hidden', !isErr);
+    if (noCfg) noCfg.classList.toggle('hidden', Sync.hasConfig());
+  }
+
+  function lockGate(text, isErr) {
+    gateState = 'locked';
+    moveAuthPanel($('#gateForm'));
+    ensureGate().classList.remove('hidden');
+    document.body.classList.add('gated');
+    paintGate(text, isErr);
+    renderGateEnv();
+  }
+
+  function openGate() {
+    gateState = 'open';
+    moveAuthPanel($('#view-account'));
+    ensureGate().classList.add('hidden');
+    document.body.classList.remove('gated');
+    renderEnvBadge();
+  }
+
+  /**
+   * 会话状态每次变化都过一遍这里，登录与退出登录都自动生效（含 token 过期、
+   * 其它标签页退出后被同步过来的情况），不靠各自的按钮回调去切。
+   * checking 阶段不落到 locked，免得刚显示「正在检查」就闪成「请登录」。
+   */
+  function applyGate() {
+    var s = Sync.state();
+    var want = s.email ? 'open' : 'locked';
+    if (gateState === want) return;
+    if (want === 'open') { openGate(); return; }
+    if (!Sync.hasConfig()) lockGate('当前版本未内置云端服务，暂时无法登录', true);
+    else if (s.status === 'error') lockGate(s.message || '登录服务暂时不可用，请检查网络', true);
+    else lockGate('登录后即可开始学习');
+  }
+
+  /**
+   * 启动即盖门禁。会话判定要等一次异步 getSession()，在那之前不能露出应用，
+   * 所以先摆「正在检查」的姿势，而不是等结果出来再盖（那样会看到应用闪一下）。
+   */
+  function armGate() {
+    ensureGate();
+    moveAuthPanel($('#gateForm'));
+    $('#gate').classList.remove('hidden');
+    document.body.classList.add('gated');
+  }
+  armGate();
+
   function initTerms() {
     TERMS = (window.TERMS || []).slice();
     byId = {}; CATS = [];
@@ -61,7 +182,7 @@
     points: ['教材考点', '第二版教材按章抽考点，标记掌握专项突破'],
     stats: ['学习统计', '掌握进度、每日学习量与难词本'],
     settings: ['设置', '学习计划、数据备份与快捷键'],
-    account: ['账号与同步', '登录后可在手机与电脑之间同步学习进度']
+    account: ['账号与同步', '学习进度在手机与电脑之间自动同步']
   };
 
   var currentViewName = 'learn';
@@ -290,10 +411,7 @@
     var el = $('#envBadge');
     if (!el) return;
     var isDev = Sync.envName() !== 'prod';
-    var force = (function () {
-      try { return new URLSearchParams(location.search).get('env') != null; }
-      catch (e) { return /[?&]env\b/.test(location.search); }
-    })();
+    var force = envForced();
 
     if (!isDev && !force) { el.classList.add('hidden'); return; }
     el.classList.remove('hidden');
@@ -333,6 +451,7 @@
   }
 
   function afterCloudChange() {
+    applyGate();
     // 云端数据替换了本地对象时才重绘，避免每次同步消息都刷新界面
     if (Store.data !== lastDataRef) {
       lastDataRef = Store.data;
@@ -1411,6 +1530,9 @@
 
   function doAuth(isSignUp) {
     if (authBusy) return;
+    // 从门禁进来的话，登录成功后门禁会被隐藏，写进面板里的常驻提示就看不见了，
+    // 这种路径只给 toast；留在账号页登录/注册时才用常驻提示。
+    var fromGate = gateState === 'locked';
     var chk = checkIdentifier($('#acctEmail').value);
     if (!chk.ok) { authFeedback(chk.msg); return; }
     var pwd = $('#acctPwd').value;
@@ -1426,7 +1548,7 @@
       if (ok) {
         // 成功：toast 只是辅助，主反馈是下面这块常驻的成功提示
         var who = chk.email ? chk.id : '用户名 ' + chk.id;
-        authFeedback('✓ ' + (isSignUp ? '注册成功，已自动登录' : '登录成功') + '（' + who + '），学习数据开始云端同步');
+        if (!fromGate) authFeedback('✓ ' + (isSignUp ? '注册成功，已自动登录' : '登录成功') + '（' + who + '），学习数据开始云端同步');
         toast(isSignUp ? '注册成功，已自动登录' : '登录成功');
       } else {
         authFeedback(friendlyAuthError(Sync.state().message, chk.email), false);
@@ -1439,6 +1561,7 @@
 
   bind('#btnSignIn', 'click', function () { doAuth(false); });
   bind('#btnSignUp', 'click', function () { doAuth(true); });
+  bind('#gateRetry', 'click', function () { location.reload(); });
 
   bind('#btnSignOut', 'click', function () {
     Sync.signOut().then(function () { renderAccount(); authFeedback(''); toast('已退出登录，数据仍保留在本机'); });
@@ -1528,6 +1651,9 @@
   });
 
   document.addEventListener('keydown', function (e) {
+    // 门禁期间必须屏蔽：应用本体只是 visibility:hidden，键盘事件照样能打到
+    // #view-learn 上，空格翻卡 / 123 评分会在未登录时改写本机记录。
+    if (gateState === 'checking' || gateState === 'locked') return;
     var learnActive = $('#view-learn').classList.contains('active');
     if (e.key === 'Escape') { $('#modal').classList.add('hidden'); return; }
     if (!learnActive || $('#modal').classList.contains('hidden') === false) return;
@@ -1596,5 +1722,12 @@
     startSession();
     switchView('learn');
   });
-  Sync.init().then(function () { afterCloudChange(); });
+  Sync.init().then(function () {
+    afterCloudChange();
+  }).catch(function (e) {
+    // init 内部基本已兜住，这里只是保证门禁一定会落到终态，
+    // 绝不会停在「正在检查登录状态…」让人干等
+    console.warn('[启动] 同步初始化异常：', e);
+    applyGate();
+  });
 })();
