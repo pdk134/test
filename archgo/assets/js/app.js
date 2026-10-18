@@ -281,6 +281,36 @@
     return m ? m[1] : cfg.url;
   }
 
+  /**
+   * 环境标识：开发构建在最顶部显示一条醒目的黄条，生产构建则完全不渲染。
+   * 这样终端用户看不到任何内部信息，而你一眼就能确认自己在哪个环境。
+   * 另支持 ?env 参数在生产站点上临时自查（带项目 ref 与表名）。
+   */
+  function renderEnvBadge() {
+    var el = $('#envBadge');
+    if (!el) return;
+    var isDev = Sync.envName() !== 'prod';
+    var force = (function () {
+      try { return new URLSearchParams(location.search).get('env') != null; }
+      catch (e) { return /[?&]env\b/.test(location.search); }
+    })();
+
+    if (!isDev && !force) { el.classList.add('hidden'); return; }
+    el.classList.remove('hidden');
+    if (isDev) {
+      el.classList.remove('is-prod');
+      el.innerHTML = '⚠ <b>开发环境</b> · 数据存于开发库，与生产互不相通';
+    } else {
+      el.classList.add('is-prod');
+      el.innerHTML = '生产环境 · ' + escapeHtml(projectTag()) + ' · 表 ' + escapeHtml(Sync.tableName());
+    }
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
   function renderAccount() {
     var s = Sync.state();
     var logged = !!s.email;
@@ -292,11 +322,12 @@
     if (logged) {
       $('#acctEmailShow').textContent = s.email;
       $('#acctStatus').textContent = STATUS_TEXT[s.status] || s.status;
-      // 顶行显示「项目 + 表名」，避免「以为在连生产、其实连着 dev」这类误判
-      var info = '项目 ' + projectTag() + ' · 表 ' + Sync.tableName();
-      if (s.message) info += ' · ' + s.message;
-      if (s.lastSync) info += ' · 上次同步 ' + new Date(s.lastSync).toLocaleTimeString();
+      // 项目 ref / 表名属于部署内部信息，不对终端用户暴露；排查时看控制台即可
+      var info = s.message || '';
+      if (s.lastSync) info += (info ? ' · ' : '') + '上次同步 ' + new Date(s.lastSync).toLocaleTimeString();
+      console.info('[环境] 项目 ' + projectTag() + ' · 表 ' + Sync.tableName() + ' · ' + (Sync.state().email || '未登录'));
       $('#acctSyncInfo').textContent = info;
+      renderEnvBadge();
     }
     updateSide();
   }
@@ -1485,13 +1516,16 @@
   // 考试日期：软考高级系统架构设计师（可在此修改）
   var EXAM_DATE = new Date(2026, 9, 24, 9, 0, 0); // 月份从 0 计，9 = 10 月
   var cdTimer = null;
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
   function renderCountdown() {
-    var bar = $('#countdownBar'), dEl = $('#cdDays'), tEl = $('#cdTime');
+    var bar = $('#countdownBar'), dEl = $('#cdDays'), tEl = $('#cdTime'), uEl = $('#cdUnit');
     if (!bar || !dEl || !tEl) return;
     var diff = EXAM_DATE.getTime() - Date.now();
     if (diff <= 0) {
       clearInterval(cdTimer); cdTimer = null;
-      dEl.textContent = '已开考';
+      dEl.textContent = '开考';
+      if (uEl) uEl.textContent = '';
       tEl.textContent = '';
       bar.classList.remove('urgent', 'soon');
       bar.classList.add('now');
@@ -1503,8 +1537,18 @@
     var days = Math.floor(s / 86400); s -= days * 86400;
     var h = Math.floor(s / 3600); s -= h * 3600;
     var m = Math.floor(s / 60); var sec = s - m * 60;
-    dEl.textContent = days + '天' + h + '时' + m + '分' + sec + '秒';
-    tEl.textContent = '';
+
+    // 大号只放「天」，时分秒走右侧时钟位 —— 整串塞进 30px 粗体在手机上必然挤爆
+    if (days > 0) {
+      dEl.textContent = days;
+      if (uEl) uEl.textContent = '天';
+      tEl.textContent = pad2(h) + ':' + pad2(m) + ':' + pad2(sec);
+    } else {
+      dEl.textContent = h;
+      if (uEl) uEl.textContent = '时';
+      tEl.textContent = pad2(m) + ':' + pad2(sec);
+    }
+
     // 紧迫感分级：<7 天 urgent（红脉冲），<15 天 soon（暖色）
     bar.classList.toggle('urgent', days < 7);
     bar.classList.toggle('soon', days >= 7 && days < 15);
@@ -1515,6 +1559,7 @@
   /* ---------------- 启动 ---------------- */
   lastDataRef = Store.data;
   Sync.onChange(afterCloudChange);
+  renderEnvBadge();
   applySettings();
   if (Store.data.settings.bgm && window.Bgm) Bgm.startWhenAllowed(); // 等首次点击/按键后才真正出声
   updateSide();

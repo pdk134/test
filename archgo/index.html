@@ -20,6 +20,9 @@
 <body>
 <div class="app">
 
+  <!-- 环境标识：仅开发构建才渲染。生产构建由流水线写入 prod，此元素永不出现 -->
+  <div class="env-badge hidden" id="envBadge"></div>
+
   <!-- 顶部 App 栏 -->
   <header class="appbar">
     <div class="appbar-left">
@@ -43,7 +46,7 @@
   <div class="countdown-bar" id="countdownBar">
     <div class="cd-left">
       <div class="cd-label">距软考 · 系统架构设计师</div>
-      <div class="cd-main"><b id="cdDays">--</b></div>
+      <div class="cd-main"><b id="cdDays">--</b><span class="cd-unit" id="cdUnit">天</span></div>
     </div>
     <div class="cd-right">
       <div class="cd-time" id="cdTime"></div>
