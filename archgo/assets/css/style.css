@@ -152,11 +152,7 @@ button, input, select, .chip, .tab-item, .opt, .lib-item, .tag { touch-action: m
 }
 .panel h3 { font-size: 15px; margin-bottom: 12px; }
 .panel-row { display: grid; grid-template-columns: 1fr; gap: 14px; }
-.adv-config summary { cursor: pointer; font-size: 15px; font-weight: 600; list-style: none; }
-.adv-config summary::-webkit-details-marker { display: none; }
-.adv-config summary::before { content: '▸ '; color: var(--text-dim); }
-.adv-config[open] summary { margin-bottom: 12px; }
-.adv-config[open] summary::before { content: '▾ '; }
+.acct-box { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 12px; }
 .muted { color: var(--text-dim); font-size: 13px; line-height: 1.7; }
 
 /* ---------------- 底部 Tab 导航 ---------------- */

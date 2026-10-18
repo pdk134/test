@@ -43,10 +43,10 @@
   <div class="countdown-bar" id="countdownBar">
     <div class="cd-left">
       <div class="cd-label">距软考 · 系统架构设计师</div>
-      <div class="cd-main"><b id="cdDays">--</b><span>天</span></div>
+      <div class="cd-main"><b id="cdDays">--</b></div>
     </div>
     <div class="cd-right">
-      <div class="cd-time" id="cdTime">--:--:--</div>
+      <div class="cd-time" id="cdTime"></div>
       <div class="cd-date">10月24日 09:00 开考</div>
     </div>
   </div>
@@ -389,14 +389,26 @@
       </div>
 
       <div class="panel">
-        <h3>数据</h3>
-        <p class="muted">学习记录保存在浏览器本地，可导出备份或换设备导入。</p>
+        <h3>数据与备份</h3>
+        <p class="muted">术语进度、真题错题本、案例/论文待巩固标记全部包含在内，登录后会随云端同步。导入采用<strong>合并</strong>而非覆盖，不会抹掉你已有的卡片。</p>
         <div class="sum-actions">
           <button class="btn ghost" id="btnExport">导出 JSON</button>
           <button class="btn ghost" id="btnImport">导入 JSON</button>
-          <button class="btn danger" id="btnReset">清空全部记录</button>
         </div>
         <input type="file" id="importFile" accept="application/json" hidden>
+
+        <h3 style="margin-top:18px">本地快照</h3>
+        <p class="muted">同步覆盖前、以及导入 / 恢复 / 清空前，都会自动在此留一份快照（最多 5 份）。发现数据不对时可一键回退。</p>
+        <div class="lib-list" id="bakList"></div>
+      </div>
+
+      <div class="panel">
+        <h3>清空记录</h3>
+        <p class="muted"><strong>「仅清本机」</strong>：只删这台设备的数据，云端不动 —— 重新登录后会从云端恢复。<strong>「本机 + 云端」</strong>：两边一起删，不可恢复（会先自动留快照）。</p>
+        <div class="sum-actions">
+          <button class="btn ghost" id="btnResetLocal">仅清本机</button>
+          <button class="btn danger" id="btnResetAll">本机 + 云端</button>
+        </div>
       </div>
 
       <div class="panel">
@@ -426,6 +438,7 @@
           <button class="btn primary" id="btnSignIn">登录</button>
           <button class="btn ghost" id="btnSignUp">注册</button>
         </div>
+        <p class="muted hidden" id="acctNoCfg" style="margin-top:10px">当前版本未内置云端服务，登录暂不可用。学习记录仍会完整保存在本机，云端服务恢复后自动续上。</p>
       </div>
 
       <div class="panel hidden" id="acctUser">
@@ -440,23 +453,6 @@
         </div>
         <p class="muted" style="margin-top:10px">两端都在线时会自动同步：本机改动 2.5 秒后上传，切回页面时拉取云端最新数据。</p>
       </div>
-
-      <details class="panel adv-config">
-        <summary>高级：更换 / 自定义云端服务</summary>
-        <p class="muted">已内置默认 Supabase 项目，直接登录即可跨设备同步。想换成自己的项目，在这里覆盖（配置只存在本机浏览器，不会写进代码仓库）。</p>
-        <div class="form-row">
-          <label>Project URL</label>
-          <input type="text" id="sbUrl" placeholder="https://xxxx.supabase.co" class="wide">
-        </div>
-        <div class="form-row">
-          <label>anon key</label>
-          <input type="password" id="sbKey" placeholder="eyJhbGciOi..." class="wide">
-        </div>
-        <div class="sum-actions" style="justify-content:flex-start">
-          <button class="btn primary" id="btnSaveCfg">保存配置</button>
-          <button class="btn ghost" id="btnClearCfg">恢复内置配置</button>
-        </div>
-      </details>
     </section>
   </main>
 

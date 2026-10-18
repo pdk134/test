@@ -48,6 +48,7 @@
     account: ['账号与同步', '登录后可在手机与电脑之间同步学习进度']
   };
 
+  var currentViewName = 'learn';
   function switchView(name) {
     var list = document.querySelectorAll('.view');
     for (var i = 0; i < list.length; i++) list[i].classList.toggle('active', list[i].id === 'view-' + name);
@@ -59,9 +60,24 @@
     if (name === 'library') ensureTerms().then(renderLibrary);
     if (name === 'stats') ensureTerms().then(renderStats);
     if (name === 'account') renderAccount();
+    if (name === 'settings') renderBackups();
     if (name === 'points') ensurePoints().then(renderPoints);
-    if (name === 'quiz') ensureTerms(); // 术语自测默认分段依赖词库
+    if (name === 'quiz') {
+      ensureTerms();
+      if (currentViewName !== 'quiz') { // 从其它视图切回真题时，恢复首页（显示全真模拟考试入口并回到术语子模块）
+        $('#mockEntry').classList.remove('hidden');
+        $('#mockTimer').classList.add('hidden');
+        $('#quizMock').classList.add('hidden');
+        $('#quizTerm').classList.remove('hidden');
+        $('#quizExam').classList.add('hidden');
+        $('#quizCase').classList.add('hidden');
+        $('#quizEssay').classList.add('hidden');
+        var segItems = document.querySelectorAll('#quizSeg .seg-item');
+        for (var s = 0; s < segItems.length; s++) segItems[s].classList.toggle('active', segItems[s].getAttribute('data-seg') === 'term');
+      }
+    }
     window.scrollTo(0, 0);
+    currentViewName = name;
   }
 
   /* 手势护栏时间戳：滑动评分后 600ms 内忽略合成 click */
@@ -231,30 +247,36 @@
 
   function updateSide() {
     var d = Store.dailyCounts();
-    var n = $('#sideNew'), r = $('#sideRev'), k = $('#sideStreak'), u = $('#sideUser');
+    var n = $('#sideNew'), r = $('#sideRev'), k = $('#sideStreak');
     if (n) n.textContent = d.n;
     if (r) r.textContent = d.r;
     if (k) k.textContent = d.streak;
-    if (u) u.textContent = '';
-    var s = Sync.state();
-    if (u && s.email) u.textContent = '· ' + s.email.split('@')[0];
   }
 
   /* ---------------- 账号与同步 ---------------- */
   var STATUS_TEXT = { off: '未同步', ready: '已连接', syncing: '同步中', error: '异常' };
   var lastDataRef = null;
 
+  /** 从 url 里取出 Supabase 项目 ref（如 jyytfphsldxmmxqltqvp），用于一眼区分环境 */
+  function projectTag() {
+    var cfg = Sync.config();
+    if (!cfg || !cfg.url) return '未配置项目';
+    var m = /https?:\/\/([a-z0-9]+)\.supabase\./i.exec(cfg.url);
+    return m ? m[1] : cfg.url;
+  }
+
   function renderAccount() {
-    var s = Sync.state(), cfg = Sync.config();
-    $('#sbUrl').value = cfg ? cfg.url : '';
-    $('#sbKey').value = cfg ? cfg.key : '';
+    var s = Sync.state();
     var logged = !!s.email;
+    $('#acctNoCfg').classList.toggle('hidden', Sync.hasConfig());
     $('#acctAuth').classList.toggle('hidden', logged);
     $('#acctUser').classList.toggle('hidden', !logged);
     if (logged) {
       $('#acctEmailShow').textContent = s.email;
       $('#acctStatus').textContent = STATUS_TEXT[s.status] || s.status;
-      var info = s.message ? s.message : '';
+      // 顶行显示「项目 + 表名」，避免「以为在连生产、其实连着 dev」这类误判
+      var info = '项目 ' + projectTag() + ' · 表 ' + Sync.tableName();
+      if (s.message) info += ' · ' + s.message;
       if (s.lastSync) info += ' · 上次同步 ' + new Date(s.lastSync).toLocaleTimeString();
       $('#acctSyncInfo').textContent = info;
     }
@@ -477,44 +499,31 @@
 
   /* ---------------- 历年真题（软考架构师·综合知识） ---------------- */
   var EXAM_ALL = (window.EXAM_QUESTIONS || []).slice();
+  // 真题错题本 / 完成题数：现挂在 Store.data.exam 下，随云端一起同步
+  // （旧版本存在独立键 arch-term-exam-v1，已由 Store 的 migrateLegacy 自动迁入）
   var examStore = {
-    KEY: 'arch-term-exam-v1',
-    data: { wrong: {}, totalDone: 0 },
-    load: function () {
-      try {
-        var raw = localStorage.getItem(this.KEY);
-        if (raw) this.data = JSON.parse(raw);
-        if (!this.data.wrong) this.data.wrong = {};
-        if (typeof this.data.totalDone !== 'number') this.data.totalDone = 0;
-      } catch (e) {}
-    },
-    save: function () {
-      try { localStorage.setItem(this.KEY, JSON.stringify(this.data)); } catch (e) {}
-    },
-    wrongCount: function () { return Object.keys(this.data.wrong).length; },
+    data: function () { return Store.data.exam; },
+    save: function () { Store.touch(); },
+    wrongCount: function () { return Object.keys(Store.data.exam.wrong).length; },
     markWrong: function (id) {
-      this.data.wrong[id] = (this.data.wrong[id] || 0) + 1;
-      this.save();
+      Store.data.exam.wrong[id] = (Store.data.exam.wrong[id] || 0) + 1;
+      Store.touch();
     },
     clearWrong: function (id) {
-      if (this.data.wrong[id]) { delete this.data.wrong[id]; this.save(); }
+      if (Store.data.exam.wrong[id]) { delete Store.data.exam.wrong[id]; Store.touch(); }
     },
-    bumpDone: function () { this.data.totalDone++; this.save(); }
+    bumpDone: function () { Store.data.exam.totalDone++; Store.touch(); }
   };
-  examStore.load();
 
   // 案例 / 论文 的「待巩固」错题（选择题错题由 examStore 管理）
   var wrongExtra = (function () {
-    var KEY = 'arch-term-wrong-extra';
-    var d = { case: {}, essay: {} };
-    try { d = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) {}
-    if (!d.case) d.case = {}; if (!d.essay) d.essay = {};
+    function d() { return Store.data.wrongExtra; }
     return {
-      has: function (t, id) { return !!d[t][id]; },
-      toggle: function (t, id) { if (d[t][id]) delete d[t][id]; else d[t][id] = 1; try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {} },
-      count: function (t) { return Object.keys(d[t]).length; },
-      ids: function (t) { return Object.keys(d[t]); },
-      clear: function (t) { d[t] = {}; try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {} }
+      has: function (t, id) { return !!d()[t][id]; },
+      toggle: function (t, id) { var o = d()[t]; if (o[id]) delete o[id]; else o[id] = 1; Store.touch(); },
+      count: function (t) { return Object.keys(d()[t]).length; },
+      ids: function (t) { return Object.keys(d()[t]); },
+      clear: function (t) { d()[t] = {}; Store.touch(); }
     };
   })();
 
@@ -550,7 +559,7 @@
   function startExam(withIds) {
     var pool;
     if (withIds) {
-      pool = EXAM_ALL.filter(function (q) { return examStore.data.wrong[q.id]; });
+      pool = EXAM_ALL.filter(function (q) { return examStore.data().wrong[q.id]; });
     } else {
       pool = exam.filter === 'all' ? EXAM_ALL.slice()
         : EXAM_ALL.filter(function (q) { return q.y + q.s === exam.filter; });
@@ -774,6 +783,7 @@
   });
 
   function showQuizPanel(seg) {
+    $('#mockEntry').classList.add('hidden'); // 进入任一练习子模块时隐藏顶部"全真模拟考试"入口
     var panels = { term: '#quizTerm', exam: '#quizExam', case: '#quizCase', essay: '#quizEssay' };
     Object.keys(panels).forEach(function (k) { $(panels[k]).classList.toggle('hidden', k !== seg); });
     var items = document.querySelectorAll('#quizSeg .seg-item');
@@ -1279,18 +1289,6 @@
     applySettings();
   });
 
-  $('#btnSaveCfg').addEventListener('click', function () {
-    Sync.setConfig($('#sbUrl').value, $('#sbKey').value);
-    Sync.init();
-    toast('配置已保存');
-    renderAccount();
-  });
-  $('#btnClearCfg').addEventListener('click', function () {
-    Sync.setConfig('', '');
-    Sync.init();
-    toast('已恢复内置云端配置');
-    renderAccount();
-  });
   $('#btnSignIn').addEventListener('click', function () {
     var email = $('#acctEmail').value.trim(), pwd = $('#acctPwd').value;
     if (!email || pwd.length < 6) { toast('请填写邮箱和至少 6 位密码'); return; }
@@ -1320,7 +1318,7 @@
     a.href = URL.createObjectURL(blob);
     a.download = 'arch-terms-' + Store.dayKey() + '.json';
     a.click();
-    toast('已导出学习记录');
+    toast('已导出全部学习记录（含真题错题本）');
   });
   $('#btnImport').addEventListener('click', function () { $('#importFile').click(); });
   $('#importFile').addEventListener('change', function (e) {
@@ -1329,19 +1327,63 @@
     var reader = new FileReader();
     reader.onload = function () {
       try {
-        if (Store.load(JSON.parse(reader.result))) { applySettings(); toast('导入成功'); startSession(); }
-        else toast('文件格式不正确');
+        if (Store.load(JSON.parse(reader.result))) {
+          applySettings();
+          renderBackups();
+          ensureTerms().then(function () { startSession(); renderLibrary(); renderStats(); });
+          toast('导入成功（已合并，不影响已有进度）');
+        } else toast('文件格式不正确');
       } catch (err) { toast('解析失败'); }
     };
     reader.readAsText(f);
     e.target.value = '';
   });
-  $('#btnReset').addEventListener('click', function () {
-    if (!confirm('确定清空全部学习记录？该操作不可恢复。')) return;
+
+  /* ---------------- 本地快照 ---------------- */
+  function renderBackups() {
+    var el = $('#bakList');
+    if (!el) return;
+    var list = Store.listBackups();
+    if (!list.length) { el.innerHTML = '<p class="muted">还没有快照。同步覆盖 / 导入 / 恢复 / 清空前都会自动创建。</p>'; return; }
+    el.innerHTML = list.map(function (b) {
+      return '<div class="lib-item" data-bak="' + b.t + '"><div class="lib-top">' +
+        '<div class="lib-term">' + new Date(b.t).toLocaleString() + '</div>' +
+        '<span class="badge learning">' + b.reason + ' · ' + b.cards + ' 词 / ' + b.reviewed + ' 次</span></div>' +
+        '<div class="lib-def">点一下恢复到这份快照（恢复前会先自动备份当前状态）</div></div>';
+    }).join('');
+  }
+  document.addEventListener('click', function (e) {
+    var it = e.target.closest('[data-bak]');
+    if (!it) return;
+    var t = +it.getAttribute('data-bak');
+    if (!confirm('恢复到 ' + new Date(t).toLocaleString() + ' 的快照？当前状态会先自动备份。')) return;
+    if (Store.restoreBackup(t)) {
+      applySettings();
+      renderBackups();
+      ensureTerms().then(function () { startSession(); renderLibrary(); renderStats(); });
+      toast('已恢复该快照');
+    } else toast('恢复失败');
+  });
+
+  $('#btnResetLocal').addEventListener('click', function () {
+    if (!confirm('确定清空本机学习记录？云端不受影响，重新登录后可从云端恢复。')) return;
+    Store.snapshot('清空本机前自动备份');
     Store.reset();
     applySettings();
-    switchView('settings');
-    toast('已清空');
+    renderBackups();
+    ensureTerms().then(function () { startSession(); renderLibrary(); renderStats(); });
+    toast('本机已清空');
+  });
+  $('#btnResetAll').addEventListener('click', function () {
+    if (!confirm('确定清空本机【和】云端的学习记录？不可恢复（仅会先自动留一份本地快照）。')) return;
+    Store.snapshot('清空全部前自动备份');
+    Store.reset();
+    Sync.purge().then(function (ok) {
+      applySettings();
+      renderBackups();
+      ensureTerms().then(function () { startSession(); renderLibrary(); renderStats(); });
+      toast(ok ? '本机与云端均已清空' : (Sync.state().message || '本机已清空'));
+    });
   });
 
   document.addEventListener('keydown', function (e) {
@@ -1365,8 +1407,8 @@
     var diff = EXAM_DATE.getTime() - Date.now();
     if (diff <= 0) {
       clearInterval(cdTimer); cdTimer = null;
-      dEl.textContent = '0';
-      tEl.textContent = '00:00:00';
+      dEl.textContent = '已开考';
+      tEl.textContent = '';
       bar.classList.remove('urgent', 'soon');
       bar.classList.add('now');
       bar.querySelector('.cd-label').textContent = '软考 · 系统架构设计师 进行中';
@@ -1377,8 +1419,8 @@
     var days = Math.floor(s / 86400); s -= days * 86400;
     var h = Math.floor(s / 3600); s -= h * 3600;
     var m = Math.floor(s / 60); var sec = s - m * 60;
-    dEl.textContent = days;
-    tEl.textContent = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+    dEl.textContent = days + '天' + h + '时' + m + '分' + sec + '秒';
+    tEl.textContent = '';
     // 紧迫感分级：<7 天 urgent（红脉冲），<15 天 soon（暖色）
     bar.classList.toggle('urgent', days < 7);
     bar.classList.toggle('soon', days >= 7 && days < 15);

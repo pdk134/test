@@ -1,37 +1,48 @@
 /**
  * 云端同步层（Supabase）
  * - 账号：邮箱 + 密码（Supabase Auth）
- * - 数据：每个用户一行 { user_id, data(jsonb), updated_at }，靠 RLS 保证只能读写自己的那一行
- * - 冲突策略：每个用户只存一条整份快照，按 updatedAt 取最新的（last-write-wins）
+ * - 数据：每个用户一行 { user_id, data(json), updated_at(bigint) }，靠 RLS 保证只能读写自己那一行
+ * - 表名可配（config.js 的 table 字段），用于开发 / 生产隔离：
+ *   生产 main → progress；开发 nanana → progress_dev。两者同项目、不同表，互不污染。
+ *   不要再靠「账号页高级面板」的本地覆盖来区分环境 —— 它存在 localStorage 里，
+ *   切分支不会失效，很容易出现「以为在 main 其实连着 dev」的错觉。
+ * - 冲突策略：**只合并、绝不整份覆盖**。
+ *   早期版本按 updated_at 做 last-write-wins，一旦某台新设备拿着空白快照（时间戳最新）推上去，
+ *   其它设备就会被整份吃空。现在 pull 一律走 Store.merge()，push 前也会先看云端，
+ *   云端更丰富时改为合并回本地，只升不降。
+ * - 覆盖云端前自动在本地留快照（最多 5 份），可在设置页一键回退。
  */
 window.Sync = (function () {
   var CFG_KEY = 'arch-term-supabase-config';
-  var TABLE = 'progress';
+  var DEFAULT_TABLE = 'progress';
   var client = null;
   var cfg = null;
   var user = null;
   var listeners = [];
   var pushTimer = null;
-  var state = { status: 'off', message: '', lastSync: 0, email: '' };
+  var state = { status: 'off', message: '', lastSync: 0, email: '', table: DEFAULT_TABLE };
 
   function emit(msg) {
     if (msg) state.message = msg;
     for (var i = 0; i < listeners.length; i++) listeners[i](state);
   }
 
-  function loadConfig() {
-    try { cfg = JSON.parse(localStorage.getItem(CFG_KEY)) || null; } catch (e) { cfg = null; }
-    if (!cfg || !cfg.url || !cfg.key) {
-      var d = window.SUPABASE_CONFIG || {};
-      cfg = (d.url && d.anonKey) ? { url: d.url, key: d.anonKey } : null;
-    }
-    return cfg;
+  /** 当前使用的表名：优先本机覆盖 → 内置 config.js → 默认 progress */
+  function tableName() {
+    var t = cfg && cfg.table;
+    if (!t) { var d = window.SUPABASE_CONFIG || {}; t = d.table; }
+    return (t && String(t).trim()) || DEFAULT_TABLE;
   }
 
-  function setConfig(url, key) {
-    localStorage.setItem(CFG_KEY, JSON.stringify({ url: (url || '').trim(), key: (key || '').trim() }));
-    client = null;
-    loadConfig();
+  function loadConfig() {
+    // 旧版本在「账号页 → 高级」里把项目配置写进 localStorage 覆盖 config.js，
+    // 而那个入口已经下线。这种残留配置切分支也不会失效，会让 App 一直连着旧项目，
+    // 所以这里直接一次性清掉，config.js 成为唯一配置来源。
+    try { localStorage.removeItem(CFG_KEY); } catch (e) {}
+    var d = window.SUPABASE_CONFIG || {};
+    cfg = (d.url && d.anonKey) ? { url: d.url, key: d.anonKey, table: d.table } : null;
+    state.table = tableName();
+    return cfg;
   }
 
   function clientNow() {
@@ -52,47 +63,76 @@ window.Sync = (function () {
   }
 
   /* ---------------- 拉取 / 推送 ---------------- */
+
+  /** 一份数据里 reps>0 的卡片数，用来判断哪一侧更「有进度」 */
+  function progressOf(d) {
+    var n = 0, k;
+    if (d && d.cards) for (k in d.cards) if ((d.cards[k].reps || 0) > 0) n++;
+    return n;
+  }
+
   async function pull(fromInit) {
     var c = clientNow();
     if (!c || !user) return false;
     try {
-      var res = await c.from(TABLE).select('*').eq('user_id', user.id).maybeSingle();
+      var res = await c.from(tableName()).select('*').eq('user_id', user.id).maybeSingle();
       if (res.error) { fail(res.error); return false; }
       var remote = res.data;
-      var localTs = Store.data.updatedAt || 0;
-      if (!remote) {
-        await push(true);
-        state.lastSync = Date.now();
+      state.lastSync = Date.now();
+
+      if (!remote || !remote.data) {
+        await push(true, true);
+        state.status = 'ready';
         emit('云端还没有数据，已上传本机进度');
-      } else if (remote.updated_at > localTs + 1000) {
-        Store.replace(remote.data);
-        state.lastSync = Date.now();
-        emit(fromInit ? '已从云端恢复进度' : '已同步（采用云端最新数据）');
-      } else if (remote.updated_at + 1000 < localTs) {
-        await push(true);
-        state.lastSync = Date.now();
-        emit('已上传本机最新进度');
+        return true;
+      }
+
+      // 一律合并，不用远端整份替换本地
+      var r = Store.merge(remote.data);
+      if (r.changed) {
+        Store.touch();
+        await push(false, true);           // 合并进来的新进度回推云端
+        state.status = 'ready';
+        emit('已合并云端数据' + (r.gained > 0 ? '（新增 ' + r.gained + ' 个已学术语）' : ''));
       } else {
-        state.lastSync = Date.now();
+        state.status = 'ready';
         emit('两端数据一致');
       }
-      state.status = 'ready';
-      emit();
       return true;
     } catch (e) { fail(e); return false; }
   }
 
-  async function push(force) {
+  /**
+   * 上传本地进度。
+   * known = 已经在本次流程里读到过云端现状（如 pull 刚查过），跳过重复查询。
+   * 上传前会比对云端：云端进度更丰富时，先把云端合并回本地（并留快照），再推上去。
+   */
+  async function push(force, known) {
     var c = clientNow();
     if (!c || !user) return false;
     try {
-      var res = await c.from(TABLE).upsert(
+      if (!known) {
+        var cur = await c.from(tableName()).select('data,updated_at').eq('user_id', user.id).maybeSingle();
+        if (cur.error) { fail(cur.error); return false; }
+        var rd = cur.data && cur.data.data;
+        if (rd && progressOf(rd) > progressOf(Store.data)) {
+          Store.snapshot('云端数据更丰富，已自动备份本机');
+          var r = Store.merge(rd);
+          Store.touch();
+          state.message = '云端数据更丰富，已合并而非覆盖';
+          emit(state.message);
+          known = true;
+          if (r.gained > 0) state.message += '（+' + r.gained + ' 个术语）';
+          emit();
+        }
+      }
+      var res = await c.from(tableName()).upsert(
         { user_id: user.id, data: Store.data, updated_at: Store.data.updatedAt || Date.now() },
         { onConflict: 'user_id' }
       );
       if (res.error) { fail(res.error); return false; }
       state.lastSync = Date.now();
-      if (force) emit('已上传到云端');
+      if (force) emit(state.message || '已上传到云端');
       else emit();
       return true;
     } catch (e) { fail(e); return false; }
@@ -102,6 +142,21 @@ window.Sync = (function () {
     if (!isReady()) return;
     clearTimeout(pushTimer);
     pushTimer = setTimeout(function () { push(false); }, 2500);
+  }
+
+  /** 删除云端这一行（设置页「同时清除云端」用）。RLS 允许本人删除自己的行。 */
+  async function purge() {
+    var c = clientNow();
+    if (!c || !user) { state.status = 'error'; state.message = '请先登录再清除云端数据'; emit(); return false; }
+    try {
+      Store.snapshot('清除云端前自动备份');
+      var res = await c.from(tableName()).delete().eq('user_id', user.id);
+      if (res.error) { fail(res.error); return false; }
+      state.lastSync = Date.now();
+      state.status = 'ready';
+      emit('云端数据已删除，本机记录保持不变');
+      return true;
+    } catch (e) { fail(e); return false; }
   }
 
   /* ---------------- 账号 ---------------- */
@@ -192,12 +247,13 @@ window.Sync = (function () {
     isReady: isReady,
     hasConfig: function () { return !!cfg; },
     config: function () { return cfg; },
-    setConfig: setConfig,
+    tableName: tableName,
     signIn: signIn,
     signUp: signUp,
     signOut: signOut,
     pull: function () { return pull(false); },
     push: function () { return push(true); },
+    purge: purge,
     schedulePush: schedulePush,
     onChange: function (fn) { listeners.push(fn); }
   };

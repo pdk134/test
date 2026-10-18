@@ -21,11 +21,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 组装待发布的站点：根路径放 MYAPP，/period-tracker/ 放经期小助手
+      # 组装待发布的站点：根路径放学习通 App，/period-tracker/ 放经期小助手
+      # App 目录正从 MYAPP/ 迁移到 archgo/，这里两个都兼容；都没有则直接失败，
+      # 避免静默部署出一个空站（曾经踩过：目录改名后站点构建成空白页）
       - name: Assemble site
         run: |
           mkdir -p site
-          if [ -d MYAPP ]; then cp -r MYAPP/. site/; fi
+          if [ -d archgo ]; then
+            cp -r archgo/. site/
+            echo "App 源目录: archgo/"
+          elif [ -d MYAPP ]; then
+            cp -r MYAPP/. site/
+            echo "App 源目录: MYAPP/"
+          else
+            echo "::error::未找到 App 源目录（archgo/ 或 MYAPP/），中止部署"
+            exit 1
+          fi
           if [ -d period-tracker ]; then
             mkdir -p site/period-tracker
             cp -r period-tracker/. site/period-tracker/
