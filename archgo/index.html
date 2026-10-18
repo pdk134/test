@@ -18,6 +18,19 @@
 <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>
+<!-- 登录门禁：未登录时盖住整个应用。表单由 app.js 从账号页搬进来（共用同一份节点，不重复实现） -->
+<div class="gate hidden" id="gate">
+  <div class="gate-card">
+    <div class="gate-logo">架</div>
+    <h2 class="gate-title">架构术语学习通</h2>
+    <p class="gate-sub" id="gateSub"><span class="spin"></span>正在检查登录状态…</p>
+    <div class="gate-env hidden" id="gateEnv"></div>
+    <div class="gate-form" id="gateForm"></div>
+    <button class="btn ghost block hidden" id="gateRetry">重新加载</button>
+    <p class="gate-foot">登录后学习进度在手机与电脑之间自动同步</p>
+  </div>
+</div>
+
 <div class="app">
 
   <!-- 环境标识：仅开发构建才渲染。生产构建由流水线写入 prod，此元素永不出现 -->
