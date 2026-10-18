@@ -292,10 +292,10 @@
     if (logged) {
       $('#acctEmailShow').textContent = s.email;
       $('#acctStatus').textContent = STATUS_TEXT[s.status] || s.status;
-      // 顶行显示「项目 + 表名」，避免「以为在连生产、其实连着 dev」这类误判
-      var info = '项目 ' + projectTag() + ' · 表 ' + Sync.tableName();
-      if (s.message) info += ' · ' + s.message;
-      if (s.lastSync) info += ' · 上次同步 ' + new Date(s.lastSync).toLocaleTimeString();
+      // 项目 ref / 表名属于部署内部信息，不对终端用户暴露；排查时看控制台即可
+      var info = s.message || '';
+      if (s.lastSync) info += (info ? ' · ' : '') + '上次同步 ' + new Date(s.lastSync).toLocaleTimeString();
+      console.info('[环境] 项目 ' + projectTag() + ' · 表 ' + Sync.tableName() + ' · ' + (Sync.state().email || '未登录'));
       $('#acctSyncInfo').textContent = info;
     }
     updateSide();
@@ -1485,13 +1485,16 @@
   // 考试日期：软考高级系统架构设计师（可在此修改）
   var EXAM_DATE = new Date(2026, 9, 24, 9, 0, 0); // 月份从 0 计，9 = 10 月
   var cdTimer = null;
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
   function renderCountdown() {
-    var bar = $('#countdownBar'), dEl = $('#cdDays'), tEl = $('#cdTime');
+    var bar = $('#countdownBar'), dEl = $('#cdDays'), tEl = $('#cdTime'), uEl = $('#cdUnit');
     if (!bar || !dEl || !tEl) return;
     var diff = EXAM_DATE.getTime() - Date.now();
     if (diff <= 0) {
       clearInterval(cdTimer); cdTimer = null;
-      dEl.textContent = '已开考';
+      dEl.textContent = '开考';
+      if (uEl) uEl.textContent = '';
       tEl.textContent = '';
       bar.classList.remove('urgent', 'soon');
       bar.classList.add('now');
@@ -1503,8 +1506,18 @@
     var days = Math.floor(s / 86400); s -= days * 86400;
     var h = Math.floor(s / 3600); s -= h * 3600;
     var m = Math.floor(s / 60); var sec = s - m * 60;
-    dEl.textContent = days + '天' + h + '时' + m + '分' + sec + '秒';
-    tEl.textContent = '';
+
+    // 大号只放「天」，时分秒走右侧时钟位 —— 整串塞进 30px 粗体在手机上必然挤爆
+    if (days > 0) {
+      dEl.textContent = days;
+      if (uEl) uEl.textContent = '天';
+      tEl.textContent = pad2(h) + ':' + pad2(m) + ':' + pad2(sec);
+    } else {
+      dEl.textContent = h;
+      if (uEl) uEl.textContent = '时';
+      tEl.textContent = pad2(m) + ':' + pad2(sec);
+    }
+
     // 紧迫感分级：<7 天 urgent（红脉冲），<15 天 soon（暖色）
     bar.classList.toggle('urgent', days < 7);
     bar.classList.toggle('soon', days >= 7 && days < 15);

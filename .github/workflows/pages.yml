@@ -44,28 +44,50 @@ jobs:
           echo "已组装待发布内容："
           find site -maxdepth 2 -type f | sort
 
-      # 环境切换：仅在构建默认分支时，把 config.js 里的 SUPABASE_ENV 由 'dev' 换成 'prod'。
-      # 这样日常开发只需保持 'dev'（默认值），合到 main 发布时由流水线自动切生产，
-      # 不需要任何人手动改配置，也就不会出现「忘了改 → 生产数据写进开发库」。
-      # 替换失败必须中止构建：宁可发不出去，也不能发一个连着开发库的生产站。
-      - name: Switch site to production Supabase
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      # 环境选择 + 精简产物：
+      #   1. 默认分支用 prod，其余一律 dev（宁可线上连开发库，也不能把生产数据写进开发库）
+      #   2. 把 SUPABASE_ENV 切到选中环境
+      #   3. 删掉未启用那一套配置，避免把另一个项目的 URL 与 anon key 一起发到线上
+      # 任一步校验不过就中止构建并回滚 config.js：宁可发不出去，也不发一个配置错乱的站点。
+      - name: Select Supabase environment
         run: |
           CFG=site/assets/js/config.js
           if [ ! -f "$CFG" ]; then
-            echo "::error::找不到 $CFG，环境切换中止"
+            echo "::error::找不到 $CFG，环境选择中止"
             exit 1
           fi
           cp "$CFG" /tmp/config.js.bak
-          sed -i -E "s|window\.SUPABASE_ENV[[:space:]]*=[[:space:]]*'[a-zA-Z]+'|window.SUPABASE_ENV = 'prod'|" "$CFG"
-          if ! grep -q "window.SUPABASE_ENV = 'prod'" "$CFG"; then
-            echo "::error::环境切换失败，config.js 中 SUPABASE_ENV 的写法与替换脚本不匹配"
-            echo "--- 当前内容 ---"
-            grep -n "SUPABASE_ENV" "$CFG" || echo "(未找到 SUPABASE_ENV 这一行)"
-            cp /tmp/config.js.bak "$CFG"
-            exit 1
+
+          if [ "$GITHUB_REF" = "refs/heads/main" ] || [ "$GITHUB_REF" = "refs/heads/master" ]; then
+            ENV=prod
+          else
+            ENV=dev
           fi
-          echo "环境已切换为 prod，当前生效项目："
+          OTHER=dev; [ "$ENV" = "dev" ] && OTHER=prod
+
+          sed -i -E "s|window\.SUPABASE_ENV[[:space:]]*=[[:space:]]*'[a-zA-Z]+'|window.SUPABASE_ENV = '$ENV'|" "$CFG"
+          if ! grep -q "window.SUPABASE_ENV = '$ENV'" "$CFG"; then
+            echo "::error::SUPABASE_ENV 替换失败，config.js 写法与脚本不匹配"
+            grep -n "SUPABASE_ENV" "$CFG" || echo "(未找到 SUPABASE_ENV 这一行)"
+            cp /tmp/config.js.bak "$CFG"; exit 1
+          fi
+
+          sed -i -E "/^  $OTHER: \{/,/^  \}/d" "$CFG"
+          if grep -qE "^  $OTHER: \{" "$CFG"; then
+            echo "::error::$OTHER 配置块未能从产物中清除（缩进/格式与脚本不匹配）"
+            cp /tmp/config.js.bak "$CFG"; exit 1
+          fi
+          # 兜底：产物里不允许残留另一个项目的地址
+          if [ "$ENV" = "prod" ] && grep -q "jyytfphsldxmmxqltqvp" "$CFG"; then
+            echo "::error::产物中仍残留开发项目信息，发布中止"
+            cp /tmp/config.js.bak "$CFG"; exit 1
+          fi
+          if [ "$ENV" = "dev" ] && grep -q "wyuhxtnchkndkrsfknlh" "$CFG"; then
+            echo "::error::产物中仍残留生产项目信息，发布中止"
+            cp /tmp/config.js.bak "$CFG"; exit 1
+          fi
+
+          echo "环境：$ENV（已移除 $OTHER）"
           grep -oE "https://[a-z0-9]+\.supabase\.co" "$CFG" | sort -u
 
       - name: Setup Pages
