@@ -44,6 +44,30 @@ jobs:
           echo "已组装待发布内容："
           find site -maxdepth 2 -type f | sort
 
+      # 环境切换：仅在构建默认分支时，把 config.js 里的 SUPABASE_ENV 由 'dev' 换成 'prod'。
+      # 这样日常开发只需保持 'dev'（默认值），合到 main 发布时由流水线自动切生产，
+      # 不需要任何人手动改配置，也就不会出现「忘了改 → 生产数据写进开发库」。
+      # 替换失败必须中止构建：宁可发不出去，也不能发一个连着开发库的生产站。
+      - name: Switch site to production Supabase
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        run: |
+          CFG=site/assets/js/config.js
+          if [ ! -f "$CFG" ]; then
+            echo "::error::找不到 $CFG，环境切换中止"
+            exit 1
+          fi
+          cp "$CFG" /tmp/config.js.bak
+          sed -i -E "s|window\.SUPABASE_ENV[[:space:]]*=[[:space:]]*'[a-zA-Z]+'|window.SUPABASE_ENV = 'prod'|" "$CFG"
+          if ! grep -q "window.SUPABASE_ENV = 'prod'" "$CFG"; then
+            echo "::error::环境切换失败，config.js 中 SUPABASE_ENV 的写法与替换脚本不匹配"
+            echo "--- 当前内容 ---"
+            grep -n "SUPABASE_ENV" "$CFG" || echo "(未找到 SUPABASE_ENV 这一行)"
+            cp /tmp/config.js.bak "$CFG"
+            exit 1
+          fi
+          echo "环境已切换为 prod，当前生效项目："
+          grep -oE "https://[a-z0-9]+\.supabase\.co" "$CFG" | sort -u
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
         with:
