@@ -20,6 +20,9 @@
 <body>
 <div class="app">
 
+  <!-- 环境标识：仅开发构建才渲染。生产构建由流水线写入 prod，此元素永不出现 -->
+  <div class="env-badge hidden" id="envBadge"></div>
+
   <!-- 顶部 App 栏 -->
   <header class="appbar">
     <div class="appbar-left">

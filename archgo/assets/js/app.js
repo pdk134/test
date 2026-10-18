@@ -281,6 +281,36 @@
     return m ? m[1] : cfg.url;
   }
 
+  /**
+   * 环境标识：开发构建在最顶部显示一条醒目的黄条，生产构建则完全不渲染。
+   * 这样终端用户看不到任何内部信息，而你一眼就能确认自己在哪个环境。
+   * 另支持 ?env 参数在生产站点上临时自查（带项目 ref 与表名）。
+   */
+  function renderEnvBadge() {
+    var el = $('#envBadge');
+    if (!el) return;
+    var isDev = Sync.envName() !== 'prod';
+    var force = (function () {
+      try { return new URLSearchParams(location.search).get('env') != null; }
+      catch (e) { return /[?&]env\b/.test(location.search); }
+    })();
+
+    if (!isDev && !force) { el.classList.add('hidden'); return; }
+    el.classList.remove('hidden');
+    if (isDev) {
+      el.classList.remove('is-prod');
+      el.innerHTML = '⚠ <b>开发环境</b> · 数据存于开发库，与生产互不相通';
+    } else {
+      el.classList.add('is-prod');
+      el.innerHTML = '生产环境 · ' + escapeHtml(projectTag()) + ' · 表 ' + escapeHtml(Sync.tableName());
+    }
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
   function renderAccount() {
     var s = Sync.state();
     var logged = !!s.email;
@@ -297,6 +327,7 @@
       if (s.lastSync) info += (info ? ' · ' : '') + '上次同步 ' + new Date(s.lastSync).toLocaleTimeString();
       console.info('[环境] 项目 ' + projectTag() + ' · 表 ' + Sync.tableName() + ' · ' + (Sync.state().email || '未登录'));
       $('#acctSyncInfo').textContent = info;
+      renderEnvBadge();
     }
     updateSide();
   }
@@ -1528,6 +1559,7 @@
   /* ---------------- 启动 ---------------- */
   lastDataRef = Store.data;
   Sync.onChange(afterCloudChange);
+  renderEnvBadge();
   applySettings();
   if (Store.data.settings.bgm && window.Bgm) Bgm.startWhenAllowed(); // 等首次点击/按键后才真正出声
   updateSide();

@@ -34,6 +34,11 @@ window.Sync = (function () {
     return (t && String(t).trim()) || DEFAULT_TABLE;
   }
 
+  /** 构建环境名。生产构建由流水线写成 'prod'，其余一律 'dev'（含未替换的兜底） */
+  function envName() {
+    return window.SUPABASE_ENV === 'prod' ? 'prod' : 'dev';
+  }
+
   function loadConfig() {
     // 旧版本在「账号页 → 高级」里把项目配置写进 localStorage 覆盖 config.js，
     // 而那个入口已经下线。这种残留配置切分支也不会失效，会让 App 一直连着旧项目，
@@ -248,6 +253,7 @@ window.Sync = (function () {
     hasConfig: function () { return !!cfg; },
     config: function () { return cfg; },
     tableName: tableName,
+    envName: envName,
     signIn: signIn,
     signUp: signUp,
     signOut: signOut,
