@@ -3,7 +3,7 @@
    - App Shell（HTML/CSS/JS/图标/manifest）：cache-first + 后台更新（stale-while-revalidate 变体）
    - Supabase API / CDN：network-only（不缓存动态数据与第三方 SDK）
 */
-var CACHE = 'arch-term-v6';
+var CACHE = 'arch-term-v10';
 
 var SHELL = [
   './',

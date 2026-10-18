@@ -7,6 +7,22 @@
   var CATS = [];
   var $ = function (s) { return document.querySelector(s); };
 
+  /**
+   * 安全的事件绑定：元素不存在时打一条醒目警告并跳过，而不是抛 TypeError。
+   *
+   * 为什么需要它：Service Worker 是 cache-first，版本切换的那一瞬间可能出现
+   * 「新 index.html + 旧 app.js」的错搭。此时本文件里对已删除元素的引用会抛错，
+   * 中断整个 IIFE，导致该行之后的**所有**事件绑定静默失效——
+   * 实际就表现为「学习页正常，但登录/注册按钮点了没反应」。
+   * 改成安全绑定后，即使再出现错搭，也只是少绑一个按钮并留下 console 警告，不会连坐。
+   */
+  function bind(sel, evt, fn) {
+    var el = $(sel);
+    if (!el) { console.warn('[bind] 元素不存在，已跳过绑定：' + sel + '  事件：' + evt); return null; }
+    el.addEventListener(evt, fn);
+    return el;
+  }
+
   function initTerms() {
     TERMS = (window.TERMS || []).slice();
     byId = {}; CATS = [];
@@ -48,6 +64,7 @@
     account: ['账号与同步', '登录后可在手机与电脑之间同步学习进度']
   };
 
+  var currentViewName = 'learn';
   function switchView(name) {
     var list = document.querySelectorAll('.view');
     for (var i = 0; i < list.length; i++) list[i].classList.toggle('active', list[i].id === 'view-' + name);
@@ -59,9 +76,24 @@
     if (name === 'library') ensureTerms().then(renderLibrary);
     if (name === 'stats') ensureTerms().then(renderStats);
     if (name === 'account') renderAccount();
+    if (name === 'settings') renderBackups();
     if (name === 'points') ensurePoints().then(renderPoints);
-    if (name === 'quiz') ensureTerms(); // 术语自测默认分段依赖词库
+    if (name === 'quiz') {
+      ensureTerms();
+      if (currentViewName !== 'quiz') { // 从其它视图切回真题时，恢复首页（显示全真模拟考试入口并回到术语子模块）
+        $('#mockEntry').classList.remove('hidden');
+        $('#mockTimer').classList.add('hidden');
+        $('#quizMock').classList.add('hidden');
+        $('#quizTerm').classList.remove('hidden');
+        $('#quizExam').classList.add('hidden');
+        $('#quizCase').classList.add('hidden');
+        $('#quizEssay').classList.add('hidden');
+        var segItems = document.querySelectorAll('#quizSeg .seg-item');
+        for (var s = 0; s < segItems.length; s++) segItems[s].classList.toggle('active', segItems[s].getAttribute('data-seg') === 'term');
+      }
+    }
     window.scrollTo(0, 0);
+    currentViewName = name;
   }
 
   /* 手势护栏时间戳：滑动评分后 600ms 内忽略合成 click */
@@ -231,30 +263,38 @@
 
   function updateSide() {
     var d = Store.dailyCounts();
-    var n = $('#sideNew'), r = $('#sideRev'), k = $('#sideStreak'), u = $('#sideUser');
+    var n = $('#sideNew'), r = $('#sideRev'), k = $('#sideStreak');
     if (n) n.textContent = d.n;
     if (r) r.textContent = d.r;
     if (k) k.textContent = d.streak;
-    if (u) u.textContent = '';
-    var s = Sync.state();
-    if (u && s.email) u.textContent = '· ' + s.email.split('@')[0];
   }
 
   /* ---------------- 账号与同步 ---------------- */
   var STATUS_TEXT = { off: '未同步', ready: '已连接', syncing: '同步中', error: '异常' };
   var lastDataRef = null;
 
+  /** 从 url 里取出 Supabase 项目 ref（如 jyytfphsldxmmxqltqvp），用于一眼区分环境 */
+  function projectTag() {
+    var cfg = Sync.config();
+    if (!cfg || !cfg.url) return '未配置项目';
+    var m = /https?:\/\/([a-z0-9]+)\.supabase\./i.exec(cfg.url);
+    return m ? m[1] : cfg.url;
+  }
+
   function renderAccount() {
-    var s = Sync.state(), cfg = Sync.config();
-    $('#sbUrl').value = cfg ? cfg.url : '';
-    $('#sbKey').value = cfg ? cfg.key : '';
+    var s = Sync.state();
     var logged = !!s.email;
+    $('#acctNoCfg').classList.toggle('hidden', Sync.hasConfig());
     $('#acctAuth').classList.toggle('hidden', logged);
     $('#acctUser').classList.toggle('hidden', !logged);
+    // 未登录时清掉上一次留下的提示，避免退出登录后还挂着旧文案
+    if (!logged) authFeedback('');
     if (logged) {
       $('#acctEmailShow').textContent = s.email;
       $('#acctStatus').textContent = STATUS_TEXT[s.status] || s.status;
-      var info = s.message ? s.message : '';
+      // 顶行显示「项目 + 表名」，避免「以为在连生产、其实连着 dev」这类误判
+      var info = '项目 ' + projectTag() + ' · 表 ' + Sync.tableName();
+      if (s.message) info += ' · ' + s.message;
       if (s.lastSync) info += ' · 上次同步 ' + new Date(s.lastSync).toLocaleTimeString();
       $('#acctSyncInfo').textContent = info;
     }
@@ -477,44 +517,31 @@
 
   /* ---------------- 历年真题（软考架构师·综合知识） ---------------- */
   var EXAM_ALL = (window.EXAM_QUESTIONS || []).slice();
+  // 真题错题本 / 完成题数：现挂在 Store.data.exam 下，随云端一起同步
+  // （旧版本存在独立键 arch-term-exam-v1，已由 Store 的 migrateLegacy 自动迁入）
   var examStore = {
-    KEY: 'arch-term-exam-v1',
-    data: { wrong: {}, totalDone: 0 },
-    load: function () {
-      try {
-        var raw = localStorage.getItem(this.KEY);
-        if (raw) this.data = JSON.parse(raw);
-        if (!this.data.wrong) this.data.wrong = {};
-        if (typeof this.data.totalDone !== 'number') this.data.totalDone = 0;
-      } catch (e) {}
-    },
-    save: function () {
-      try { localStorage.setItem(this.KEY, JSON.stringify(this.data)); } catch (e) {}
-    },
-    wrongCount: function () { return Object.keys(this.data.wrong).length; },
+    data: function () { return Store.data.exam; },
+    save: function () { Store.touch(); },
+    wrongCount: function () { return Object.keys(Store.data.exam.wrong).length; },
     markWrong: function (id) {
-      this.data.wrong[id] = (this.data.wrong[id] || 0) + 1;
-      this.save();
+      Store.data.exam.wrong[id] = (Store.data.exam.wrong[id] || 0) + 1;
+      Store.touch();
     },
     clearWrong: function (id) {
-      if (this.data.wrong[id]) { delete this.data.wrong[id]; this.save(); }
+      if (Store.data.exam.wrong[id]) { delete Store.data.exam.wrong[id]; Store.touch(); }
     },
-    bumpDone: function () { this.data.totalDone++; this.save(); }
+    bumpDone: function () { Store.data.exam.totalDone++; Store.touch(); }
   };
-  examStore.load();
 
   // 案例 / 论文 的「待巩固」错题（选择题错题由 examStore 管理）
   var wrongExtra = (function () {
-    var KEY = 'arch-term-wrong-extra';
-    var d = { case: {}, essay: {} };
-    try { d = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) {}
-    if (!d.case) d.case = {}; if (!d.essay) d.essay = {};
+    function d() { return Store.data.wrongExtra; }
     return {
-      has: function (t, id) { return !!d[t][id]; },
-      toggle: function (t, id) { if (d[t][id]) delete d[t][id]; else d[t][id] = 1; try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {} },
-      count: function (t) { return Object.keys(d[t]).length; },
-      ids: function (t) { return Object.keys(d[t]); },
-      clear: function (t) { d[t] = {}; try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {} }
+      has: function (t, id) { return !!d()[t][id]; },
+      toggle: function (t, id) { var o = d()[t]; if (o[id]) delete o[id]; else o[id] = 1; Store.touch(); },
+      count: function (t) { return Object.keys(d()[t]).length; },
+      ids: function (t) { return Object.keys(d()[t]); },
+      clear: function (t) { d()[t] = {}; Store.touch(); }
     };
   })();
 
@@ -550,7 +577,7 @@
   function startExam(withIds) {
     var pool;
     if (withIds) {
-      pool = EXAM_ALL.filter(function (q) { return examStore.data.wrong[q.id]; });
+      pool = EXAM_ALL.filter(function (q) { return examStore.data().wrong[q.id]; });
     } else {
       pool = exam.filter === 'all' ? EXAM_ALL.slice()
         : EXAM_ALL.filter(function (q) { return q.y + q.s === exam.filter; });
@@ -692,7 +719,7 @@
   }
 
   /* ---------------- 事件绑定 ---------------- */
-  $('#nav').addEventListener('click', function (e) {
+  bind('#nav', 'click', function (e) {
     var btn = e.target.closest('.tab-item');
     if (btn) { buzz(6); if (window.Sfx) Sfx.click(); switchView(btn.getAttribute('data-view')); }
   });
@@ -702,7 +729,7 @@
     if (jump && !jump.classList.contains('tab-item')) { if (window.Sfx) Sfx.click(); switchView(jump.getAttribute('data-view')); }
   });
 
-  $('#flashcard').addEventListener('click', flip);
+  bind('#flashcard', 'click', flip);
 
   /* ---- 触屏手势：未翻面横滑=翻卡；翻面后 右滑=认识 左滑=不认识 上滑=模糊 ---- */
   (function () {
@@ -744,36 +771,37 @@
     });
   })();
 
-  $('#btnFlip').addEventListener('click', flip);
-  $('#btnSpeak').addEventListener('click', function () {
+  bind('#btnFlip', 'click', flip);
+  bind('#btnSpeak', 'click', function () {
     var item = session.items[session.idx];
     if (item) speak(byId[item.id].t);
   });
-  $('#rateBar').addEventListener('click', function (e) {
+  bind('#rateBar', 'click', function (e) {
     var b = e.target.closest('[data-r]');
     if (b) rate(+b.getAttribute('data-r'));
   });
-  $('#btnMore').addEventListener('click', function () { startSession(); });
-  $('#btnExtra').addEventListener('click', function () { startSession(10); });
+  bind('#btnMore', 'click', function () { startSession(); });
+  bind('#btnExtra', 'click', function () { startSession(10); });
 
-  $('#libSearch').addEventListener('input', function (e) { libState.q = e.target.value; renderLibrary(); });
-  $('#libStatus').addEventListener('change', function (e) { libState.status = e.target.value; renderLibrary(); });
-  $('#libCats').addEventListener('click', function (e) {
+  bind('#libSearch', 'input', function (e) { libState.q = e.target.value; renderLibrary(); });
+  bind('#libStatus', 'change', function (e) { libState.status = e.target.value; renderLibrary(); });
+  bind('#libCats', 'click', function (e) {
     var c = e.target.closest('[data-cat]');
     if (!c) return;
     libState.cat = c.getAttribute('data-cat');
     renderLibrary();
   });
-  $('#libList').addEventListener('click', function (e) {
+  bind('#libList', 'click', function (e) {
     var it = e.target.closest('[data-open]');
     if (it) openDetail(it.getAttribute('data-open'));
   });
-  $('#hardList').addEventListener('click', function (e) {
+  bind('#hardList', 'click', function (e) {
     var it = e.target.closest('[data-open]');
     if (it) openDetail(it.getAttribute('data-open'));
   });
 
   function showQuizPanel(seg) {
+    $('#mockEntry').classList.add('hidden'); // 进入任一练习子模块时隐藏顶部"全真模拟考试"入口
     var panels = { term: '#quizTerm', exam: '#quizExam', case: '#quizCase', essay: '#quizEssay' };
     Object.keys(panels).forEach(function (k) { $(panels[k]).classList.toggle('hidden', k !== seg); });
     var items = document.querySelectorAll('#quizSeg .seg-item');
@@ -789,7 +817,7 @@
       ensureEssay().then(function () { showQuizPanel('essay'); renderEssayTpl(); renderEssayList(); });
     }
   }
-  $('#wrongList').addEventListener('click', function (e) {
+  bind('#wrongList', 'click', function (e) {
     var row = e.target.closest('[data-wrong]'); if (!row) return;
     var btn = e.target.closest('.btn'); if (!btn || btn.disabled) return;
     reviewWrongSubject(row.getAttribute('data-wrong'));
@@ -799,19 +827,19 @@
     var g = e.target.closest('[data-goto]');
     if (g) openDetail(g.getAttribute('data-goto'));
   });
-  $('#modalClose').addEventListener('click', function () { $('#modal').classList.add('hidden'); });
-  $('#modal').addEventListener('click', function (e) { if (e.target === $('#modal')) $('#modal').classList.add('hidden'); });
+  bind('#modalClose', 'click', function () { $('#modal').classList.add('hidden'); });
+  bind('#modal', 'click', function (e) { if (e.target === $('#modal')) $('#modal').classList.add('hidden'); });
 
-  $('#btnQuizStart').addEventListener('click', function () { startQuiz(+$('#quizCount').value); });
-  $('#quizOptions').addEventListener('click', function (e) {
+  bind('#btnQuizStart', 'click', function () { startQuiz(+$('#quizCount').value); });
+  bind('#quizOptions', 'click', function (e) {
     var b = e.target.closest('.opt');
     if (b && !b.disabled) answer(b);
   });
-  $('#btnQuizNext').addEventListener('click', function () { quiz.i++; renderQuestion(); });
-  $('#btnQuizAgain').addEventListener('click', function () { startQuiz(+$('#quizCount').value); });
+  bind('#btnQuizNext', 'click', function () { quiz.i++; renderQuestion(); });
+  bind('#btnQuizAgain', 'click', function () { startQuiz(+$('#quizCount').value); });
 
   /* 真题模块（术语自测 / 选择题 / 案例 / 论文） */
-  $('#quizSeg').addEventListener('click', function (e) {
+  bind('#quizSeg', 'click', function (e) {
     var b = e.target.closest('.seg-item');
     if (!b) return;
     buzz(6);
@@ -830,34 +858,34 @@
     if (seg === 'essay') ensureEssay().then(function () { renderEssayTpl(); renderEssayList(); });
     if (seg === 'term') ensureTerms();
   });
-  $('#examYears').addEventListener('click', function (e) {
+  bind('#examYears', 'click', function (e) {
     var c = e.target.closest('[data-ef]');
     if (!c) return;
     exam.filter = c.getAttribute('data-ef');
     renderExamStart();
   });
-  $('#btnExamStart').addEventListener('click', function () { startExam(false); });
-  $('#btnExamWrong').addEventListener('click', function () { startExam(true); });
-  $('#examOptions').addEventListener('click', function (e) {
+  bind('#btnExamStart', 'click', function () { startExam(false); });
+  bind('#btnExamWrong', 'click', function () { startExam(true); });
+  bind('#examOptions', 'click', function (e) {
     var b = e.target.closest('.opt');
     if (b && !b.disabled) answerExam(b);
   });
-  $('#btnExamNext').addEventListener('click', function () { exam.i++; renderExamQ(); });
-  $('#btnExamAgain').addEventListener('click', function () {
+  bind('#btnExamNext', 'click', function () { exam.i++; renderExamQ(); });
+  bind('#btnExamAgain', 'click', function () {
     $('#examResult').classList.add('hidden');
     $('#examStart').classList.remove('hidden');
     renderExamStart();
   });
-  $('#btnExamReview').addEventListener('click', reviewWrong);
+  bind('#btnExamReview', 'click', reviewWrong);
 
   /* 中途退出（术语自测 / 历年真题） */
-  $('#btnQuizExit').addEventListener('click', function () {
+  bind('#btnQuizExit', 'click', function () {
     if (window.Sfx) Sfx.click();
     $('#quizPlay').classList.add('hidden');
     $('#quizResult').classList.add('hidden');
     $('#quizStart').classList.remove('hidden');
   });
-  $('#btnExamExit').addEventListener('click', function () {
+  bind('#btnExamExit', 'click', function () {
     if (window.Sfx) Sfx.click();
     $('#examPlay').classList.add('hidden');
     $('#examResult').classList.add('hidden');
@@ -925,16 +953,16 @@
     renderCaseStart();
     toast('本套练习完成');
   }
-  $('#caseYears').addEventListener('click', function (e) {
+  bind('#caseYears', 'click', function (e) {
     var c = e.target.closest('[data-cf]'); if (!c) return;
     caseState.filter = c.getAttribute('data-cf'); renderCaseStart();
   });
-  $('#btnCaseStart').addEventListener('click', startCase);
-  $('#btnCaseExit').addEventListener('click', function () {
+  bind('#btnCaseStart', 'click', startCase);
+  bind('#btnCaseExit', 'click', function () {
     if (window.Sfx) Sfx.click();
     $('#casePlay').classList.add('hidden'); $('#caseStart').classList.remove('hidden'); renderCaseStart();
   });
-  $('#caseBody').addEventListener('click', function (e) {
+  bind('#caseBody', 'click', function (e) {
     var rev = e.target.closest('.case-reveal');
     if (rev) {
       var a = $('#caseA' + rev.getAttribute('data-ci'));
@@ -995,11 +1023,11 @@
     });
     $('#essayList').innerHTML = html;
   }
-  $('#essayYears').addEventListener('click', function (e) {
+  bind('#essayYears', 'click', function (e) {
     var c = e.target.closest('[data-ef2]'); if (!c) return;
     essayState.filter = c.getAttribute('data-ef2'); renderEssayList();
   });
-  $('#essayList').addEventListener('click', function (e) {
+  bind('#essayList', 'click', function (e) {
     var card = e.target.closest('.essay-card'); if (!card) return;
     var tips = card.querySelector('.ec-tips');
     var btn = card.querySelector('.ec-toggle');
@@ -1042,15 +1070,15 @@
     for (var i = 0; i < items.length; i++) items[i].classList.toggle('active', items[i].getAttribute('data-seg') === 'term');
     $('#quizTerm').classList.remove('hidden');
   }
-  $('#mockEntry').addEventListener('click', function (e) {
+  bind('#mockEntry', 'click', function (e) {
     var b = e.target.closest('[data-mock]'); if (!b) return;
     if (window.Sfx) Sfx.click();
     var k = b.getAttribute('data-mock');
     if (k === 'exam') startMockExam(); else if (k === 'case') startMockCase(); else if (k === 'essay') startMockEssay();
   });
-  $('#btnMockQuit').addEventListener('click', function () { mockExit(); toast('已退出模考'); });
-  $('#btnMockSubmit').addEventListener('click', function () { if (mockState.onExpire) { var fn = mockState.onExpire; mockState.onExpire = null; fn(); } });
-  $('#quizMock').addEventListener('click', function (e) { if (mockState.onClick) mockState.onClick(e); });
+  bind('#btnMockQuit', 'click', function () { mockExit(); toast('已退出模考'); });
+  bind('#btnMockSubmit', 'click', function () { if (mockState.onExpire) { var fn = mockState.onExpire; mockState.onExpire = null; fn(); } });
+  bind('#quizMock', 'click', function (e) { if (mockState.onClick) mockState.onClick(e); });
 
   function startMockExam() {
     ensureExam().then(function () {
@@ -1088,7 +1116,7 @@
           '<p class="muted">及格线 45 分（正确率≈60%）。时间到或交卷均按当前进度计分。</p>' +
           '<div class="sum-actions"><button class="btn primary" id="mBack">返回真题</button></div></div>';
         m.wrong.forEach(function (id) { examStore.markWrong(id); });
-        $('#mBack').addEventListener('click', mockExit);
+        bind('#mBack', 'click', mockExit);
       }
       mockState.onClick = function (e) {
         var b = e.target.closest('.opt'); if (b && !b.disabled) { answer(b); return; }
@@ -1124,7 +1152,7 @@
       function finish() {
         mockState.onClick = null; mockStopTimer();
         $('#quizMock').innerHTML = '<div class="panel"><h3>模考完成 · 案例分析</h3><p class="muted">已完成 ' + c.total + ' 套案例。交卷后请按评分点自评（每套约 75 分，及格 45）。</p><div class="sum-actions"><button class="btn primary" id="mBack">返回真题</button></div></div>';
-        $('#mBack').addEventListener('click', mockExit);
+        bind('#mBack', 'click', mockExit);
       }
       mockState.onClick = function (e) {
         var rev = e.target.closest('.case-reveal');
@@ -1152,13 +1180,13 @@
           '<div class="tpl-row"><b>摘要公式</b><p>' + (tpl.summary || '') + '</p></div>' +
           '<div class="tpl-row"><b>五段式</b><p>' + (tpl.structure || '') + '</p></div>' +
           '<div class="tpl-row"><b>本题要点</b><p>' + (e0.tips || '').replace(/</g, '&lt;') + '</p></div></details>';
-        $('#mEssay').addEventListener('input', function () { $('#mWord').textContent = $('#mEssay').value.replace(/\s/g, '').length; });
+        bind('#mEssay', 'input', function () { $('#mWord').textContent = $('#mEssay').value.replace(/\s/g, '').length; });
       }
       function finish() {
         mockState.onClick = null; mockStopTimer();
         var w = $('#mEssay') ? $('#mEssay').value.replace(/\s/g, '').length : 0;
         $('#quizMock').innerHTML = '<div class="panel"><h3>模考完成 · 论文</h3><p class="muted">本题已写 ' + w + ' 字。论文评分看项目真实性、论点覆盖度与深度，交卷后对照上方「本题要点」自测。</p><div class="sum-actions"><button class="btn primary" id="mBack">返回真题</button></div></div>';
-        $('#mBack').addEventListener('click', mockExit);
+        bind('#mBack', 'click', mockExit);
       }
       mockState.onClick = function () {};
       mockStartTimer(120, '论文写作模考', finish);
@@ -1205,11 +1233,11 @@
     $('#ptTotal').textContent = total;
     $('#ptMastered').textContent = mastered;
   }
-  $('#ptCats').addEventListener('click', function (e) {
+  bind('#ptCats', 'click', function (e) {
     var c = e.target.closest('[data-pf]'); if (!c) return;
     ptState.filter = c.getAttribute('data-pf'); renderPoints();
   });
-  $('#ptList').addEventListener('click', function (e) {
+  bind('#ptList', 'click', function (e) {
     var rel = e.target.closest('.pc-rel');
     if (rel) { openRelQuestions(rel.getAttribute('data-rel')); return; }
     var card = e.target.closest('.point-card'); if (!card) return;
@@ -1248,100 +1276,198 @@
     });
   }
 
-  $('#setNew').addEventListener('change', function (e) { Store.data.settings.dailyNew = +e.target.value; Store.touch(); });
-  $('#setRev').addEventListener('change', function (e) { Store.data.settings.dailyReview = +e.target.value; Store.touch(); });
-  $('#setSpeak').addEventListener('change', function (e) { Store.data.settings.autoSpeak = e.target.checked; Store.touch(); });
-  $('#setBgm').addEventListener('change', function (e) { setBgm(e.target.checked, true); });
-  $('#setBgmVol').addEventListener('input', function (e) {
+  bind('#setNew', 'change', function (e) { Store.data.settings.dailyNew = +e.target.value; Store.touch(); });
+  bind('#setRev', 'change', function (e) { Store.data.settings.dailyReview = +e.target.value; Store.touch(); });
+  bind('#setSpeak', 'change', function (e) { Store.data.settings.autoSpeak = e.target.checked; Store.touch(); });
+  bind('#setBgm', 'change', function (e) { setBgm(e.target.checked, true); });
+  bind('#setBgmVol', 'input', function (e) {
     Store.data.settings.bgmVol = +e.target.value;
     if (window.Bgm) Bgm.setVolume(+e.target.value / 100);
   });
-  $('#setBgmVol').addEventListener('change', function () { Store.touch(); });
-  $('#setSfx').addEventListener('change', function (e) {
+  bind('#setBgmVol', 'change', function () { Store.touch(); });
+  bind('#setSfx', 'change', function (e) {
     Store.data.settings.sfx = e.target.checked;
     Store.touch();
     if (window.Sfx) Sfx.setEnabled(e.target.checked);
     if (e.target.checked && window.Sfx) Sfx.click();
   });
-  $('#setSfxVol').addEventListener('input', function (e) {
+  bind('#setSfxVol', 'input', function (e) {
     Store.data.settings.sfxVol = +e.target.value;
     if (window.Sfx) Sfx.setVolume(+e.target.value / 100);
   });
-  $('#setSfxVol').addEventListener('change', function () {
+  bind('#setSfxVol', 'change', function () {
     Store.touch();
     if (window.Sfx && Store.data.settings.sfx !== false) Sfx.click(); // 松手时试听一下
   });
-  $('#btnBgm').addEventListener('click', function () { setBgm(!Store.data.settings.bgm, true); });
-  $('#themeBtn').addEventListener('click', function () {
+  bind('#btnBgm', 'click', function () { setBgm(!Store.data.settings.bgm, true); });
+  bind('#themeBtn', 'click', function () {
     var s = Store.data.settings;
     s.theme = s.theme === 'dark' ? 'light' : 'dark';
     Store.touch();
     applySettings();
   });
 
-  $('#btnSaveCfg').addEventListener('click', function () {
-    Sync.setConfig($('#sbUrl').value, $('#sbKey').value);
-    Sync.init();
-    toast('配置已保存');
-    renderAccount();
-  });
-  $('#btnClearCfg').addEventListener('click', function () {
-    Sync.setConfig('', '');
-    Sync.init();
-    toast('已恢复内置云端配置');
-    renderAccount();
-  });
-  $('#btnSignIn').addEventListener('click', function () {
-    var email = $('#acctEmail').value.trim(), pwd = $('#acctPwd').value;
-    if (!email || pwd.length < 6) { toast('请填写邮箱和至少 6 位密码'); return; }
-    Sync.signIn(email, pwd).then(function (ok) {
-      renderAccount();
-      toast(ok ? '登录成功' : (Sync.state().message || '登录失败'));
+  /* ---------------- 账号登录：等待态 + 行内反馈 ---------------- */
+
+  /** Supabase 返回的是英文原话，映射成用户看得懂的中文 */
+  function friendlyAuthError(msg) {
+    var m = String(msg || '');
+    if (/invalid login credentials/i.test(m)) return '邮箱或密码不正确，请重新输入';
+    if (/email not confirmed/i.test(m)) return '邮箱尚未验证，请先到邮箱点击确认链接';
+    if (/user already registered/i.test(m)) return '该邮箱已注册，请直接登录';
+    if (/password should be at least/i.test(m)) return '密码至少需要 6 位';
+    if (/unable to validate email/i.test(m)) return '邮箱格式不正确';
+    if (/rate limit|too many/i.test(m)) return '操作过于频繁，请稍后再试';
+    if (/fetch|network|failed to fetch/i.test(m)) return '网络连接失败，请检查网络后重试';
+    if (/supabase sdk|未加载/i.test(m)) return '云端服务未加载，请联网后刷新重试';
+    if (/请先配置|未配置/i.test(m)) return '当前版本未内置云端服务，登录暂不可用';
+    return m || '操作失败，请稍后重试';
+  }
+
+  /** 行内反馈条：常驻显示，不自动消失，保证用户来得及读完。
+   *  登录成功后登录表单会被隐藏，所以同一条消息要同时写进「已登录」面板，否则成功提示一闪就没了。 */
+  function authFeedback(msg, ok) {
+    ['#acctErr', '#acctUserMsg'].forEach(function (sel) {
+      var el = $(sel);
+      if (!el) return;
+      if (!msg) { el.className = 'hidden'; el.textContent = ''; return; }
+      el.textContent = msg;
+      el.className = ok ? 'form-ok' : 'form-err';   // 用 className 复位，避免残留 hidden
     });
-  });
-  $('#btnSignUp').addEventListener('click', function () {
-    var email = $('#acctEmail').value.trim(), pwd = $('#acctPwd').value;
-    if (!email || pwd.length < 6) { toast('请填写邮箱和至少 6 位密码'); return; }
-    Sync.signUp(email, pwd).then(function (ok) {
-      renderAccount();
-      toast(ok ? '注册并登录成功' : (Sync.state().message || '注册失败'));
+  }
+
+  /** 请求进行中：按钮变灰 + 转圈 + 文案切换，杜绝重复点击造成的重复注册 */
+  var authBusy = false;
+  function setAuthBusy(on, label) {
+    authBusy = !!on;
+    var bi = $('#btnSignIn'), bu = $('#btnSignUp');
+    [bi, bu].forEach(function (b) {
+      if (!b) return;
+      b.disabled = authBusy;
+      if (authBusy) {
+        b.dataset.label = b.dataset.label || b.textContent;
+        b.innerHTML = '<span class="spin"></span>' + (label || '处理中…');
+      } else if (b.dataset.label) {
+        b.textContent = b.dataset.label;
+      }
     });
+  }
+
+  function doAuth(isSignUp) {
+    if (authBusy) return;
+    var email = $('#acctEmail').value.trim(), pwd = $('#acctPwd').value;
+    if (!email) { authFeedback('请填写邮箱'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { authFeedback('邮箱格式不正确'); return; }
+    if (pwd.length < 6) { authFeedback('密码至少 6 位'); return; }
+
+    authFeedback('');
+    setAuthBusy(true, isSignUp ? '注册中…' : '登录中…');
+
+    var p = isSignUp ? Sync.signUp(email, pwd) : Sync.signIn(email, pwd);
+    p.then(function (ok) {
+      setAuthBusy(false);
+      renderAccount();
+      if (ok) {
+        // 成功：toast 只是辅助，主反馈是下面这块常驻的成功提示
+        authFeedback('✓ ' + (isSignUp ? '注册成功，已自动登录' : '登录成功') + '，学习数据开始云端同步');
+        toast(isSignUp ? '注册成功，已自动登录' : '登录成功');
+      } else {
+        authFeedback(friendlyAuthError(Sync.state().message), false);
+      }
+    }).catch(function (e) {
+      setAuthBusy(false);
+      authFeedback(friendlyAuthError((e && e.message) || e), false);
+    });
+  }
+
+  bind('#btnSignIn', 'click', function () { doAuth(false); });
+  bind('#btnSignUp', 'click', function () { doAuth(true); });
+
+  bind('#btnSignOut', 'click', function () {
+    Sync.signOut().then(function () { renderAccount(); authFeedback(''); toast('已退出登录，数据仍保留在本机'); });
   });
-  $('#btnSignOut').addEventListener('click', function () {
-    Sync.signOut().then(function () { renderAccount(); toast('已退出登录'); });
-  });
-  $('#btnSyncNow').addEventListener('click', function () {
-    Sync.pull().then(function () { renderAccount(); toast(Sync.state().message || '已同步'); });
+  bind('#btnSyncNow', 'click', function () {
+    var b = $('#btnSyncNow');
+    if (b) { b.disabled = true; b.innerHTML = '<span class="spin"></span>同步中…'; }
+    Sync.pull().then(function () {
+      if (b) { b.disabled = false; b.textContent = '立即同步'; }
+      renderAccount();
+      authFeedback(Sync.state().message || '已同步', true);
+    });
   });
 
-  $('#btnExport').addEventListener('click', function () {
+  bind('#btnExport', 'click', function () {
     var blob = new Blob([Store.exportText()], { type: 'application/json' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'arch-terms-' + Store.dayKey() + '.json';
     a.click();
-    toast('已导出学习记录');
+    toast('已导出全部学习记录（含真题错题本）');
   });
-  $('#btnImport').addEventListener('click', function () { $('#importFile').click(); });
-  $('#importFile').addEventListener('change', function (e) {
+  bind('#btnImport', 'click', function () { $('#importFile').click(); });
+  bind('#importFile', 'change', function (e) {
     var f = e.target.files[0];
     if (!f) return;
     var reader = new FileReader();
     reader.onload = function () {
       try {
-        if (Store.load(JSON.parse(reader.result))) { applySettings(); toast('导入成功'); startSession(); }
-        else toast('文件格式不正确');
+        if (Store.load(JSON.parse(reader.result))) {
+          applySettings();
+          renderBackups();
+          ensureTerms().then(function () { startSession(); renderLibrary(); renderStats(); });
+          toast('导入成功（已合并，不影响已有进度）');
+        } else toast('文件格式不正确');
       } catch (err) { toast('解析失败'); }
     };
     reader.readAsText(f);
     e.target.value = '';
   });
-  $('#btnReset').addEventListener('click', function () {
-    if (!confirm('确定清空全部学习记录？该操作不可恢复。')) return;
+
+  /* ---------------- 本地快照 ---------------- */
+  function renderBackups() {
+    var el = $('#bakList');
+    if (!el) return;
+    var list = Store.listBackups();
+    if (!list.length) { el.innerHTML = '<p class="muted">还没有快照。同步覆盖 / 导入 / 恢复 / 清空前都会自动创建。</p>'; return; }
+    el.innerHTML = list.map(function (b) {
+      return '<div class="lib-item" data-bak="' + b.t + '"><div class="lib-top">' +
+        '<div class="lib-term">' + new Date(b.t).toLocaleString() + '</div>' +
+        '<span class="badge learning">' + b.reason + ' · ' + b.cards + ' 词 / ' + b.reviewed + ' 次</span></div>' +
+        '<div class="lib-def">点一下恢复到这份快照（恢复前会先自动备份当前状态）</div></div>';
+    }).join('');
+  }
+  document.addEventListener('click', function (e) {
+    var it = e.target.closest('[data-bak]');
+    if (!it) return;
+    var t = +it.getAttribute('data-bak');
+    if (!confirm('恢复到 ' + new Date(t).toLocaleString() + ' 的快照？当前状态会先自动备份。')) return;
+    if (Store.restoreBackup(t)) {
+      applySettings();
+      renderBackups();
+      ensureTerms().then(function () { startSession(); renderLibrary(); renderStats(); });
+      toast('已恢复该快照');
+    } else toast('恢复失败');
+  });
+
+  bind('#btnResetLocal', 'click', function () {
+    if (!confirm('确定清空本机学习记录？云端不受影响，重新登录后可从云端恢复。')) return;
+    Store.snapshot('清空本机前自动备份');
     Store.reset();
     applySettings();
-    switchView('settings');
-    toast('已清空');
+    renderBackups();
+    ensureTerms().then(function () { startSession(); renderLibrary(); renderStats(); });
+    toast('本机已清空');
+  });
+  bind('#btnResetAll', 'click', function () {
+    if (!confirm('确定清空本机【和】云端的学习记录？不可恢复（仅会先自动留一份本地快照）。')) return;
+    Store.snapshot('清空全部前自动备份');
+    Store.reset();
+    Sync.purge().then(function (ok) {
+      applySettings();
+      renderBackups();
+      ensureTerms().then(function () { startSession(); renderLibrary(); renderStats(); });
+      toast(ok ? '本机与云端均已清空' : (Sync.state().message || '本机已清空'));
+    });
   });
 
   document.addEventListener('keydown', function (e) {
@@ -1365,8 +1491,8 @@
     var diff = EXAM_DATE.getTime() - Date.now();
     if (diff <= 0) {
       clearInterval(cdTimer); cdTimer = null;
-      dEl.textContent = '0';
-      tEl.textContent = '00:00:00';
+      dEl.textContent = '已开考';
+      tEl.textContent = '';
       bar.classList.remove('urgent', 'soon');
       bar.classList.add('now');
       bar.querySelector('.cd-label').textContent = '软考 · 系统架构设计师 进行中';
@@ -1377,8 +1503,8 @@
     var days = Math.floor(s / 86400); s -= days * 86400;
     var h = Math.floor(s / 3600); s -= h * 3600;
     var m = Math.floor(s / 60); var sec = s - m * 60;
-    dEl.textContent = days;
-    tEl.textContent = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+    dEl.textContent = days + '天' + h + '时' + m + '分' + sec + '秒';
+    tEl.textContent = '';
     // 紧迫感分级：<7 天 urgent（红脉冲），<15 天 soon（暖色）
     bar.classList.toggle('urgent', days < 7);
     bar.classList.toggle('soon', days >= 7 && days < 15);

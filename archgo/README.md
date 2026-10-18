@@ -12,7 +12,7 @@
 2. 本地起服务（推荐，便于调试）：
 
 ```bash
-cd MYAPP
+cd archgo
 python -m http.server 8000
 # 浏览器打开 http://localhost:8000
 ```
@@ -25,7 +25,7 @@ python -m http.server 8000
 
 ## 部署到 GitHub Pages（手机随时访问）
 
-仓库根目录已放好工作流 `.github/workflows/pages.yml`，它会把 `MYAPP` 目录作为站点根发布。
+仓库根目录已放好工作流 `.github/workflows/pages.yml`，它会把 `archgo` 目录作为站点根发布。
 
 一次性配置（只需做一次）：
 
@@ -41,20 +41,42 @@ python -m http.server 8000
 
 ```bash
 git checkout nanana
-git add MYAPP .github
+git add archgo .github
 git commit -m "更新术语库"
 git push origin nanana          # 不会触发部署
 # 在 GitHub 上开 PR 合并到 main，合并后自动部署
 ```
 
+> `main` 启用了分支保护，**不能直接 push，必须走 PR**（这正是 PR #22 / #23 的由来）。
+
 > `github-pages` 环境默认只允许默认分支部署，所以工作流只在 `main` 上触发。
 
 > 部署走的是 Actions，不需要 Jekyll；页面内资源都是相对路径，放在 `https://用户名.github.io/仓库名/` 子路径下也能正常工作。
 
+### 构建期自动切换云端环境
+
+开发与生产使用**两个独立的 Supabase 项目**（不是同项目不同表 —— 原因见下文「同步规则」）。切换由流水线完成，**不需要手工改任何配置**：
+
+- `assets/js/config.js` 里同时保存 `prod` / `dev` 两套配置；
+- 唯一的开关是该文件中的 `window.SUPABASE_ENV`；
+- 构建 `main` 时工作流用 `sed` 把它替换成 `'prod'`；
+- 其余情况（本地开发、其他分支、替换失败）一律保持默认的 `'dev'`。
+
+默认值刻意选 `dev`：万一替换步骤失效，线上顶多连到开发库，而不会反过来把**生产数据写进开发库** —— 后者清理成本高得多。替换后会校验生效值，不匹配则构建直接失败并回滚配置，**宁可发不出去，也不发一个连错库的站点**。
+
+当前项目：
+
+| 环境 | Project ref | 表 |
+| --- | --- | --- |
+| 生产（`main`） | `wyuhxtnchkndkrsfknlh` | `progress` |
+| 开发（`nanana`） | `jyytfphsldxmmxqltqvp` | `progress` |
+
+要确认线上实际连的是哪个环境，看「账号」页顶行显示的 `项目 ref · 表名`，那是运行时算出的真实生效值。
+
 ## 目录结构
 
 ```
-MYAPP/
+archgo/
 ├── index.html              页面结构（GitHub Pages 就是发布这个目录）
 ├── manifest.webmanifest    PWA 清单（图标 / 主题色 / standalone 模式）
 ├── sw.js                   Service Worker（App Shell 离线缓存，SWR 策略；检测到新版时提示「刷新使用新版」）
@@ -67,13 +89,13 @@ MYAPP/
 │       ├── case.js         历年真题题库（案例分析·下午一）
 │       ├── essay.js        历年真题题库（论文·下午二）+ 写作通用模板
 │       ├── points.js       教材考点（系统架构设计师教程·第2版）重点章抽取
-│       ├── store.js        localStorage 存储层
+│       ├── store.js        存储层：本地持久化 + 防降级合并 + 快照备份
 │       ├── srs.js          间隔重复调度算法
-│       ├── config.js       Supabase 默认值（已内置）
-│       ├── sync.js         云端账号与进度同步
+│       ├── config.js       Supabase prod/dev 双环境配置（构建期切换）
+│       ├── sync.js         云端账号与进度同步（只合并，不整份覆盖）
 │       ├── bgm.js          BGM 与音效（Web Audio 实时合成，无音频文件）
 │       ├── pwa.js          PWA 安装提示 / 动态视口 / 主题色跟随
-│       └── app.js          页面交互逻辑（含触屏手势）
+│       └── app.js          页面交互逻辑（含触屏手势、登录反馈）
 └── README.md
 ```
 
@@ -167,21 +189,21 @@ MYAPP/
 
 已内置 Supabase 项目（`assets/js/config.js`），**无需任何配置**：打开「账号」页 → 用邮箱 + 密码注册/登录，手机和电脑多端自动同步进度。
 
-数据表结构：所有人共用一张 `progress` 表，**每个用户一行**，靠 RLS 策略隔离（只能读写 `user_id = auth.uid()` 的那一行）。
+数据表结构：**每个用户一行**，靠 RLS 策略隔离（只能读写 `user_id = auth.uid()` 的那一行）。
 
 ```sql
 create table if not exists public.progress (
   user_id uuid primary key references auth.users on delete cascade,
-  data jsonb not null,
-  updated_at bigint not null
+  data jsonb not null default '{}'::jsonb,
+  updated_at bigint not null default 0
 );
 
 alter table public.progress enable row level security;
 
-create policy "own_progress" on public.progress
-  for all
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+create policy "own_row" on public.progress
+  for all to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
 ```
 
 > anon key 是 Supabase 设计上可公开的前端密钥，它对应「未登录匿名角色」，已验证匿名直接查 `progress` 只会返回空数组 —— 真正的边界是上面的 RLS 策略。**千万不要把 `service_role` key 填进去**（它会绕过 RLS）。
@@ -191,15 +213,25 @@ create policy "own_progress" on public.progress
 1. supabase.com 新建（Free 计划即可）→ **SQL Editor** 执行上面的建表语句
 2. **Settings → API** 复制 Project URL 和 anon public key
 3. **Authentication → Sign In / Providers → Email** 关闭 *Confirm email*（否则注册后要先点邮件链接）
-4. 改 `assets/js/config.js` 里的 `url` / `anonKey`，或在站点「账号」页 →「高级：更换 / 自定义云端服务」里临时覆盖（覆盖值只存在本机 localStorage，点「恢复内置配置」可还原）
+4. 改 `assets/js/config.js` 里 `SUPABASE_ENVS.prod` 或 `.dev` 的 `url` / `anonKey`
+
+> 站点里**没有**「自定义云端服务」的输入框了。它曾允许在本机 localStorage 里覆盖项目配置，但那份覆盖切分支不会失效，会出现「以为在连生产、其实连着开发库」的错觉且完全看不出异常，因此已下线，改为启动时自动清理该残留键。
 
 同步规则：
 - 本机有改动 → 2.5 秒后自动上传
 - 切回页面 / 每 2 分钟 → 自动拉取云端最新数据
-- 两端冲突时以 `updatedAt` 时间戳最新的一份为准（last-write-wins）
+- 两端冲突时**只合并、不整份覆盖**：`box`/`reps`/`lapses`/`wrong` 取大，`due` 以最近一次学习为准，错题本取并集，任何一侧都不会被回退
 - 未登录时完全等同之前的纯本地模式
 
 ## 数据说明
 
-- 学习记录保存在浏览器 `localStorage`（键名 `arch-term-trainer-v1`），不上传任何服务器。
+- 学习记录保存在浏览器 `localStorage`（主键 `arch-term-trainer-v1`，快照键 `arch-term-backups`）；登录后额外在云端 `progress` 表留一份。
+- localStorage 按「源」隔离：`file://`、`http://localhost:8000`、`https://pdk134.github.io/test/` 三者**互相独立**，换设备或清理浏览器前请在「设置 → 数据与备份」导出 JSON 备份。
+
+### 换设备时的数据保全
+
+- **术语进度、真题错题本、案例/论文「待巩固」标记**都会随账号同步（早期版本后两者存在独立 localStorage 键里，换设备必丢，现已并入主数据）
+- 「设置 → 数据与备份」可**导出 / 导入 JSON**，导入走**合并**，不会抹掉已有卡片
+- 覆盖云端、导入、恢复、清空之前都会自动在「本地快照」留一份（最多 5 份），点一下即可回退
+- 清空区分「**仅清本机**」（云端不动，重登可恢复）与「**本机 + 云端**」，两者都会先自动备份
 - 换设备或清理浏览器前，请在「设置 → 数据」中导出 JSON 备份。
