@@ -26,6 +26,7 @@ def generate(
     step_callback=None,
     repetition_penalty=1.1,
     rep_window=64,
+    stop=None,
 ):
     """自回归生成。
 
@@ -38,6 +39,9 @@ def generate(
 
     ids = tok.encode(prompt)
     generated = ids[:]
+
+    last_cont = ""
+    stopped = False
 
     with torch.no_grad():
         for _ in range(max_new):
@@ -74,10 +78,28 @@ def generate(
             next_id = torch.multinomial(probs, 1).item()
             generated.append(next_id)
 
-            if step_callback is not None:
-                full = tok.decode(generated)
-                step_callback(full[len(prompt):])  # 只回传续写部分
+            # 只解码新生成的部分
+            cont = tok.decode(generated[len(ids):])
 
+            # 早停：一旦续写中出现任一停止串（如新一轮的 "你:"），立即截断并停止
+            cut = None
+            if stop:
+                for s in stop:
+                    idx = cont.find(s)
+                    if idx != -1:
+                        cut = idx if cut is None else min(cut, idx)
+                if cut is not None:
+                    cont = cont[:cut]
+
+            last_cont = cont
+            if step_callback is not None:
+                step_callback(cont)
+            if cut is not None:
+                stopped = True
+                break
+
+    if stopped:
+        return prompt + last_cont
     return tok.decode(generated)
 
 

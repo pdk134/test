@@ -168,6 +168,8 @@ def main():
             max_new=max_n, temperature=temp,
             top_k=top_k, top_p=top_p,
             repetition_penalty=rep, step_callback=step,
+            # 早停：答完就停，避免模型自己接着编下一轮"你: ... 她: ..."
+            stop=["\n", "你:", "你："],
         )
         print()  # 换行
 
