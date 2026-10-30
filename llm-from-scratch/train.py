@@ -20,6 +20,16 @@ import time
 
 import torch
 
+# 显式限制 torch 线程数：小模型(6M)在 CPU 上若放任默认线程(可能数十个)
+# 会因线程过度订阅导致有效算力被调度开销吃掉、训练极慢。4 线程对 6M 模型足够。
+import os as _os
+
+_tn = int(_os.environ.get("LLM_THREADS", "4"))
+try:
+    torch.set_num_threads(_tn)
+except Exception:
+    pass
+
 # 强制 stdout 使用 UTF-8，避免 Windows(GBK) 控制台或重定向日志里中文变乱码
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -117,20 +127,26 @@ def run_training(cfg, data_path, out_dir, progress_cb=None, stop_event=None,
 
     # ---------- 分词器 ----------
     tok_path = os.path.join(out_dir, "tokenizer.json")
-    tok = BPETokenizer()
     t0 = time.time()
-    if progress_cb:
-        progress_cb(msg="训练分词器...")
-    # 分词器只需采样部分语料即可学出子词；用子样本大幅加速（中文唯一词极多，全量很慢）
-    tok_text = text[:400_000]
-    if len(text) > 400_000 and progress_cb:
-        progress_cb(
-            msg=f"分词器训练用子样本: {len(tok_text)} 字符（原语料 {len(text)}）"
-        )
-    tok.train(tok_text, cfg.target_vocab_size, special_tokens=list(cfg.special_tokens))
-    tok.save(tok_path)
-    if progress_cb:
-        progress_cb(msg=f"分词器完成，词表 {len(tok.vocab)}，耗时 {time.time() - t0:.1f}s")
+    if os.path.exists(tok_path):
+        # 断点续训：直接复用已有分词器，避免词表变化导致模型权重对不上
+        tok = BPETokenizer.load(tok_path)
+        if progress_cb:
+            progress_cb(msg=f"复用已有分词器: 词表 {len(tok.vocab)}")
+    else:
+        tok = BPETokenizer()
+        if progress_cb:
+            progress_cb(msg="训练分词器...")
+        # 分词器只需采样部分语料即可学出子词；用子样本大幅加速（中文唯一词极多，全量很慢）
+        tok_text = text[:400_000]
+        if len(text) > 400_000 and progress_cb:
+            progress_cb(
+                msg=f"分词器训练用子样本: {len(tok_text)} 字符（原语料 {len(text)}）"
+            )
+        tok.train(tok_text, cfg.target_vocab_size, special_tokens=list(cfg.special_tokens))
+        tok.save(tok_path)
+        if progress_cb:
+            progress_cb(msg=f"分词器完成，词表 {len(tok.vocab)}，耗时 {time.time() - t0:.1f}s")
 
     tokens = tok.encode(text)
     if progress_cb:
@@ -153,10 +169,24 @@ def run_training(cfg, data_path, out_dir, progress_cb=None, stop_event=None,
 
     # ---------- 模型 ----------
     cfg.vocab_size = len(tok.vocab)
-    model = GPT(cfg, cfg.vocab_size).to(device)
-    n_params = sum(p.numel() for p in model.parameters())
-    if progress_cb:
-        progress_cb(msg=f"模型参数量: {n_params / 1e6:.2f}M")
+    model_path = os.path.join(out_dir, "model.pt")
+    if os.path.exists(model_path):
+        # 断点续训：加载已有权重继续训练（优化器状态不保存，新建即可）
+        ckpt = torch.load(model_path, map_location=device)
+        saved = {k: v for k, v in ckpt["cfg"].items() if k in GPTConfig.__dataclass_fields__}
+        for k, v in saved.items():
+            setattr(cfg, k, v)
+        cfg.vocab_size = len(tok.vocab)
+        model = GPT(cfg, cfg.vocab_size).to(device)
+        model.load_state_dict(ckpt["model"])
+        n_params = sum(p.numel() for p in model.parameters())
+        if progress_cb:
+            progress_cb(msg=f"断点续训：已加载权重, 参数量 {n_params / 1e6:.2f}M")
+    else:
+        model = GPT(cfg, cfg.vocab_size).to(device)
+        n_params = sum(p.numel() for p in model.parameters())
+        if progress_cb:
+            progress_cb(msg=f"模型参数量: {n_params / 1e6:.2f}M")
 
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay
