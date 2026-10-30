@@ -83,7 +83,8 @@ def get_lr(it, cfg):
     return 0.5 * cfg.learning_rate * (1.0 + math.cos(math.pi * min(1.0, progress)))
 
 
-def run_training(cfg, data_path, out_dir, progress_cb=None, stop_event=None):
+def run_training(cfg, data_path, out_dir, progress_cb=None, stop_event=None,
+                 val_frac=0.05):
     """执行完整训练流程，可被 CLI 或 GUI 调用。
 
     progress_cb 会被以关键字形式调用，例如：
@@ -92,6 +93,10 @@ def run_training(cfg, data_path, out_dir, progress_cb=None, stop_event=None):
         progress_cb(stage='done', msg='训练完成 ...')
     stop_event 为 threading.Event，若被置位则提前停止训练。
     返回 (tokenizer, model, cfg)。
+
+    val_frac: 验证集占比（从语料尾部切分，训练时不参与）。
+        val loss 与 train loss 分别计算，才是真实泛化指标；
+        早期版本二者共用同一批 token，val 形同自测。
     """
     os.makedirs(out_dir, exist_ok=True)
     os.makedirs("data", exist_ok=True)
@@ -131,6 +136,21 @@ def run_training(cfg, data_path, out_dir, progress_cb=None, stop_event=None):
     if progress_cb:
         progress_cb(msg=f"token 总数: {len(tokens)}")
 
+    # ---------- 训练/验证切分 ----------
+    # 从尾部切出验证集；阈值只需保证验证集能撑起 estimate_loss 的采样
+    # （eval_iters*batch_size 个窗口），取 max_seq*batch_size 即可，
+    # 避免小语料 5% 验证集被错误回退到全量（那样 val 会和 train 同源、形同自测）。
+    n_val = int(len(tokens) * val_frac)
+    if n_val >= cfg.max_seq * cfg.batch_size and n_val < len(tokens) // 2:
+        val_tokens = tokens[len(tokens) - n_val:]
+        train_tokens = tokens[: len(tokens) - n_val]
+        if progress_cb:
+            progress_cb(msg=f"切分验证集: train {len(train_tokens)} / val {len(val_tokens)} token")
+    else:
+        val_tokens, train_tokens = None, tokens
+        if progress_cb:
+            progress_cb(msg="验证集过小，本次不切分（val 将与 train 同源）")
+
     # ---------- 模型 ----------
     cfg.vocab_size = len(tok.vocab)
     model = GPT(cfg, cfg.vocab_size).to(device)
@@ -157,7 +177,7 @@ def run_training(cfg, data_path, out_dir, progress_cb=None, stop_event=None):
         for g in optimizer.param_groups:
             g["lr"] = lr
 
-        x, y = get_batch(tokens, cfg, device)
+        x, y = get_batch(train_tokens, cfg, device)
         _, loss = model(x, y)
 
         optimizer.zero_grad(set_to_none=True)
@@ -181,7 +201,7 @@ def run_training(cfg, data_path, out_dir, progress_cb=None, stop_event=None):
                 )
 
         if it % cfg.eval_interval == 0 or it == cfg.max_iters - 1:
-            val_loss = estimate_loss(model, tokens, cfg, device)
+            val_loss = estimate_loss(model, val_tokens or tokens, cfg, device)
             if progress_cb:
                 progress_cb(
                     stage="train",
@@ -209,6 +229,8 @@ def main():
     parser.add_argument("--data", type=str, default="data/corpus_mixed.txt")
     parser.add_argument("--out", type=str, default="checkpoints")
     parser.add_argument("--max_iters", type=int, default=None)
+    parser.add_argument("--val-frac", type=float, default=0.05,
+                        help="验证集占比（从语料尾部切分，训练时不参与）")
     args = parser.parse_args()
 
     cfg = GPTConfig()
@@ -219,7 +241,8 @@ def main():
         if kw.get("msg"):
             print(kw["msg"])
 
-    run_training(cfg, args.data, args.out, progress_cb=_print_cb)
+    run_training(cfg, args.data, args.out, progress_cb=_print_cb,
+                 val_frac=args.val_frac)
 
 
 if __name__ == "__main__":
