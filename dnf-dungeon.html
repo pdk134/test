@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>地下城 · 悟空闯关</title>
+<style>
+  html,body{margin:0;height:100%;background:#15131a;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;font-family:"Microsoft YaHei",sans-serif;color:#eee}
+  canvas{background:#0d0b12;border:2px solid #4a3b55;border-radius:8px;box-shadow:0 10px 40px #000}
+  #tip{margin-top:10px;font-size:13px;color:#b9a;line-height:1.6;text-align:center}
+  kbd{background:#333;padding:1px 7px;border-radius:4px;border:1px solid #555;font-family:monospace}
+</style>
+</head>
+<body>
+<canvas id="cv" width="960" height="540"></canvas>
+<div id="tip">
+  <kbd>A</kbd>/<kbd>D</kbd> 移动 &nbsp; <kbd>W</kbd> 跳跃 &nbsp; <kbd>J</kbd> 拳 &nbsp; <kbd>K</kbd> 脚 &nbsp; <kbd>R</kbd> 重开<br>
+  清空房间内怪物 → 右侧传送门开启 → 走进去进入下一房。捡血药回血、捡金箍棒升级伤害。
+</div>
+<script>
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const W = cv.width, H = cv.height;
+const GROUND = H - 60, GRAV = 0.8, ROOM_W = 1700;
+
+const keys = {};
+addEventListener('keydown', e => { keys[e.key.toLowerCase()] = true;
+  if (e.key.toLowerCase() === 'r') reset(); });
+addEventListener('keyup',   e => { keys[e.key.toLowerCase()] = false; });
+
+function makeChar(x, isPlayer, color, hp){
+  return { x, y:GROUND, vx:0, vy:0, w:40, h:80, facing:isPlayer?1:-1,
+    hp, maxhp:hp, isPlayer, color, onGround:true,
+    atk:0, atkType:null, atkCd:0, hitCd:0, knock:0, dead:false, aiTimer:0,
+    weaponLv:0, inv:0 };
+}
+let player, enemies, items, fx, floor, room, score, state, camX, cleared, doorX;
+
+function reset(){
+  player = makeChar(80, true, '#ffcf4d', 100);
+  enemies=[]; items=[]; fx=[];
+  floor=1; room=1; score=0; state='play'; camX=0;
+  loadRoom();
+}
+function loadRoom(){
+  enemies=[]; items=[]; cleared=false; doorX = ROOM_W - 40;
+  const n = Math.min(2 + Math.floor((floor-1) + room/2), 6);
+  for(let i=0;i<n;i++){
+    const tough = (floor>=2 && Math.random()<0.35);
+    const e = makeChar(700 + i*150 + Math.random()*80, false,
+                       tough?'#a05bd6':'#e0564b', 50 + floor*20 + room*5);
+    e.tough = tough; enemies.push(e);
+  }
+}
+
+function damage(a, b){
+  if (a.atk<=0 || a.hitCd>0 || b.dead) return;
+  const reach = a.atkType==='kick'?72:56;
+  if (Math.sign(b.x-a.x)===a.facing && Math.abs(b.x-a.x)<reach && Math.abs(b.y-a.y)<80){
+    let dmg = (a.atkType==='kick'?12:8) * (a.isPlayer ? 1+0.3*player.weaponLv : 1);
+    b.hp -= dmg; b.knock = a.facing*(a.atkType==='kick'?9:6);
+    b.hitCd=22; a.hitCd=18; b.inv=10;
+    if (b.hp<=0 && !b.dead){
+      b.dead=true;
+      if(!b.isPlayer){ score+= b.tough?80:40; dropLoot(b.x); }
+    }
+  }
+}
+function dropLoot(x){
+  const r = Math.random();
+  let type = r<0.4?'potion': r<0.7?'coin': r<0.9?'weapon':'none';
+  if(type!=='none') items.push({x, y:GROUND-20, type, t:0});
+}
+
+function update(){
+  if(state!=='play') return;
+  const p=player;
+  if(!p.dead){
+    p.vx=0;
+    if(keys['a']){p.vx=-4.4;p.facing=-1;}
+    if(keys['d']){p.vx= 4.4;p.facing= 1;}
+    if((keys['w']||keys[' '])&&p.onGround){p.vy=-14;p.onGround=false;}
+    if(keys['j']&&p.atkCd<=0){p.atk=16;p.atkType='punch';p.atkCd=20;}
+    if(keys['k']&&p.atkCd<=0){p.atk=22;p.atkType='kick';p.atkCd=30;}
+    enemies.forEach(e=>damage(p,e));
+  }
+  enemies.forEach(e=>{
+    if(e.dead) return; e.aiTimer++;
+    const dx=p.x-e.x;
+    if(p.dead || (e.hp<25&&Math.random()<0.02)) e.vx=-e.facing*2;
+    else if(Math.abs(dx)>62){ e.vx=Math.sign(dx)*2.7; e.facing=Math.sign(dx); }
+    else { e.vx=0; if(e.atkCd<=0 && e.aiTimer%18===0){e.atk=18;e.atkType='punch';e.atkCd=38;} }
+    damage(e,p);
+  });
+
+  const all=[p,...enemies];
+  all.forEach(o=>{
+    o.x += o.vx + (o.knock||0); o.knock*=0.82; if(Math.abs(o.knock)<0.3)o.knock=0;
+    o.vy+=GRAV; o.y+=o.vy;
+    if(o.y>=GROUND){o.y=GROUND;o.vy=0;o.onGround=true;}
+    o.x=Math.max(0,Math.min(o.x,ROOM_W));
+    if(o.atk>0)o.atk--; if(o.atkCd>0)o.atkCd--; if(o.hitCd>0)o.hitCd--; if(o.inv>0)o.inv--;
+  });
+
+  items.forEach(it=>{ it.t++; if(Math.abs(it.x-p.x)<34 && Math.abs(it.y-(p.y-20))<70){ it.taken=true;
+    if(it.type==='potion') p.hp=Math.min(p.maxhp,p.hp+30);
+    else if(it.type==='coin') score+=20;
+    else if(it.type==='weapon'){ player.weaponLv++; }
+  }});
+  items=items.filter(it=>!it.taken);
+
+  if(!cleared && enemies.every(e=>e.dead)) cleared=true;
+  if(cleared && p.x > doorX-30){
+    if(room<5){ room++; loadRoom(); p.x=80; }
+    else if(floor<3){ floor++; room=1; loadRoom(); p.x=80; }
+    else { state='win'; }
+  }
+  if(p.hp<=0){p.dead=true; state='lose';}
+  camX=Math.max(0,Math.min(p.x-W/3, ROOM_W-W));
+}
+
+function brick(x,y,w,h,c){ ctx.fillStyle=c; ctx.fillRect(x,y,w,h);
+  ctx.strokeStyle='rgba(0,0,0,0.4)'; ctx.strokeRect(x,y,w,h); }
+function drawChar(o){
+  if(o.dead) return;
+  const x=o.x-camX, y=o.y;
+  ctx.save();
+  if(o.inv>0 && o.inv%4<2) ctx.globalAlpha=0.5;
+  ctx.fillStyle=o.color;
+  ctx.fillRect(x-o.w/2, y-o.h, o.w, o.h);
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(x,y-o.h-12,14,0,7); ctx.fill();
+  if(o.atk>0){ ctx.fillStyle=o.atkType==='kick'?'#ff7':'#fda';
+    const ext=o.atkType==='kick'?55:40;
+    ctx.fillRect(o.facing>0?x+o.w/2:x-o.w/2-ext, o.atkType==='kick'?y-30:y-50, ext,12); }
+  ctx.restore();
+}
+function drawItem(it){
+  const x=it.x-camX, y=it.y + Math.sin(it.t/8)*3;
+  if(it.type==='potion'){ ctx.fillStyle='#e33'; ctx.fillRect(x-8,y-14,16,22);
+    ctx.fillStyle='#fff'; ctx.fillRect(x-3,y-9,6,3); ctx.fillRect(x-3,y-3,6,3); }
+  else if(it.type==='coin'){ ctx.fillStyle='#ffd84d'; ctx.beginPath(); ctx.arc(x,y,9,0,7); ctx.fill(); }
+  else if(it.type==='weapon'){ ctx.fillStyle='#ffcf4d'; ctx.fillRect(x-18,y-5,36,10);
+    ctx.fillStyle='#b98'; ctx.fillRect(x-22,y-3,6,6); }
+}
+function bar(x,y,w,hp,max,c){ ctx.fillStyle='#400';ctx.fillRect(x,y,w,10);
+  ctx.fillStyle=c;ctx.fillRect(x,y,w*Math.max(0,hp)/max,10); }
+function render(){
+  ctx.clearRect(0,0,W,H);
+  // 地牢石墙
+  for(let i=0;i<ROOM_W;i+=80){ const bx=i-camX;
+    for(let j=0;j<GROUND;j+=50) brick(bx, j, 78, 48, ((i/80+j/50)%2)?'#241f30':'#2c2538'); }
+  ctx.fillStyle='#33243f'; ctx.fillRect(0,GROUND,W,H-GROUND);
+  // 火把
+  for(let i=200;i<ROOM_W;i+=360){ const fx2=i-camX;
+    const f=Math.random()*4; ctx.fillStyle='#ff9d2e'; ctx.beginPath();
+    ctx.arc(fx2,GROUND-120, 8+f,0,7); ctx.fill(); }
+  // 传送门
+  if(cleared){ ctx.fillStyle='#5df'; ctx.fillRect(doorX-camX-14,GROUND-110,28,110);
+    ctx.fillStyle='#fff'; ctx.font='13px sans-serif'; ctx.fillText('▶',doorX-camX-8,GROUND-50); }
+
+  items.forEach(drawItem);
+  enemies.forEach(drawChar);
+  drawChar(player);
+
+  // HUD
+  bar(20,20,240,player.hp,player.maxhp,'#5d5');
+  ctx.fillStyle='#fff'; ctx.font='14px sans-serif';
+  ctx.fillText('悟空 HP',20,16);
+  ctx.fillText(`第${floor}层 · 第${room}/5房`, W/2-50, 20);
+  ctx.fillText(`得分 ${score}   金箍棒Lv.${player.weaponLv}`, W-230, 20);
+  const alive=enemies.filter(e=>!e.dead).length;
+  ctx.fillText(cleared?'传送门已开启 →':`剩余敌人 ${alive}`, W/2-50, 40);
+
+  if(state==='lose') overlay('你倒下了…','按 R 重来');
+  if(state==='win')  overlay('通关！三层地牢清空','按 R 再战');
+}
+function overlay(t1,t2){ ctx.fillStyle='rgba(0,0,0,0.65)';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#ffcf4d';ctx.font='46px sans-serif';
+  ctx.fillText(t1,W/2-ctx.measureText(t1).width/2,H/2);
+  ctx.fillStyle='#fff';ctx.font='20px sans-serif';
+  ctx.fillText(t2,W/2-ctx.measureText(t2).width/2,H/2+44); }
+
+function loop(){ update(); render(); requestAnimationFrame(loop); }
+reset(); loop();
+</script>
+</body>
+</html>

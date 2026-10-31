@@ -1,0 +1,22 @@
+[
+  {
+    "id": 1,
+    "mall_id": 1,
+    "mall_name": "北京SKP",
+    "mall_address": "北京市朝阳区建国路87号",
+    "user_lat": 39.9109,
+    "user_lng": 116.466,
+    "distance_m": 0,
+    "time": "2026-08-30T16:58:46.2135649+08:00"
+  },
+  {
+    "id": 2,
+    "mall_id": 2,
+    "mall_name": "上海环球港",
+    "mall_address": "上海市普陀区中山北路3300号",
+    "user_lat": 31.2342,
+    "user_lng": 121.4071,
+    "distance_m": 0,
+    "time": "2026-08-30T16:59:23.6727095+08:00"
+  }
+]
